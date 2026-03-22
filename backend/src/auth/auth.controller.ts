@@ -1,0 +1,146 @@
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  Get,
+  Query,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiQuery } from "@nestjs/swagger";
+import { IsString } from "class-validator";
+import { createHmac } from "crypto";
+import { AuthService } from "./auth.service";
+import { Public } from "./guards";
+
+class TelegramAuthDto {
+  @IsString()
+  initData: string;
+}
+
+@ApiTags("auth")
+@Controller("auth")
+export class AuthController {
+  constructor(private authService: AuthService) {}
+
+  @Post("telegram")
+  @HttpCode(200)
+  @Public()
+  @ApiOperation({
+    summary: "Login/register with Telegram initData (HMAC validated)",
+  })
+  async telegramLogin(@Body() dto: TelegramAuthDto) {
+    return this.authService.loginWithTelegram(dto.initData);
+  }
+
+  /**
+   * DEV ONLY — generates a valid signed initData for any Telegram user ID.
+   * Remove or guard this endpoint before going to production.
+   */
+  @Get("dev/mock-init-data")
+  @Public()
+  @ApiOperation({
+    summary: "[DEV] Generate a valid signed initData for testing",
+  })
+  @ApiQuery({
+    name: "id",
+    required: false,
+    description: "Telegram user ID (default: 123456789)",
+  })
+  @ApiQuery({ name: "username", required: false })
+  @ApiQuery({ name: "first_name", required: false })
+  devMockInitData(
+    @Query("id") id = "123456789",
+    @Query("username") username = "testuser",
+    @Query("first_name") first_name = "Test",
+  ) {
+    const botToken = process.env.BOT_TOKEN;
+    const user = JSON.stringify({ id: Number(id), first_name, username });
+    const auth_date = Math.floor(Date.now() / 1000);
+
+    const params = new URLSearchParams({
+      user,
+      auth_date: String(auth_date),
+      query_id: "AAHdF6IQAAAAAN0XohDhrOrc",
+    });
+
+    // Sort and build data-check string
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n");
+
+    const secretKey = createHmac("sha256", "WebAppData")
+      .update(botToken)
+      .digest();
+    const hash = createHmac("sha256", secretKey)
+      .update(dataCheckString)
+      .digest("hex");
+
+    params.set("hash", hash);
+    const initData = params.toString();
+
+    return {
+      initData,
+      usage: `POST /auth/telegram  body: { "initData": "<value above>" }`,
+    };
+  }
+
+  /**
+   * DEV ONLY — one-shot admin token endpoint.
+   * Generates signed initData for your real Telegram ID and returns a JWT directly.
+   * Protected by a secret from .env (ADMIN_DEV_SECRET).
+   */
+  @Get("dev/admin-token")
+  @Public()
+  @ApiOperation({ summary: "[DEV] Get admin JWT in one request" })
+  @ApiQuery({
+    name: "secret",
+    required: true,
+    description: "Value of ADMIN_DEV_SECRET in .env",
+  })
+  async devAdminToken(@Query("secret") secret: string) {
+    const expected = process.env.ADMIN_DEV_SECRET;
+    if (!expected || secret !== expected) {
+      throw new UnauthorizedException("Wrong secret");
+    }
+
+    const botToken = process.env.BOT_TOKEN;
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    if (!adminTelegramId) {
+      throw new UnauthorizedException("ADMIN_TELEGRAM_ID not set in .env");
+    }
+
+    // Build signed initData for the admin Telegram ID
+    const user = JSON.stringify({
+      id: Number(adminTelegramId),
+      first_name: "Admin",
+    });
+    const auth_date = Math.floor(Date.now() / 1000);
+    const params = new URLSearchParams({
+      user,
+      auth_date: String(auth_date),
+      query_id: "AAHdF6IQAAAAAN0XohDhrOrc",
+    });
+
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n");
+
+    const secretKey = createHmac("sha256", "WebAppData")
+      .update(botToken)
+      .digest();
+    const hash = createHmac("sha256", secretKey)
+      .update(dataCheckString)
+      .digest("hex");
+    params.set("hash", hash);
+
+    const result = await this.authService.loginWithTelegram(params.toString());
+    return {
+      token: result.token,
+      user: result.user,
+      note: "This token is valid for 7 days. Keep it secret!",
+    };
+  }
+}

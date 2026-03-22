@@ -1,0 +1,69 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  Index,
+} from "typeorm";
+import { Outcome } from "./outcome.entity";
+import { Bet } from "./bet.entity";
+
+export enum MarketStatus {
+  UPCOMING = "upcoming",
+  OPEN = "open",
+  CLOSED = "closed",
+  RESOLVED = "resolved",
+  SETTLED = "settled",
+  CANCELLED = "cancelled",
+}
+
+@Entity("markets")
+export class Market {
+  @PrimaryGeneratedColumn("uuid")
+  id: string;
+
+  @Column()
+  title: string;
+
+  @Column({ type: "text", nullable: true })
+  description: string;
+
+  @Column({ nullable: true })
+  imageUrl: string;
+
+  @Index()
+  @Column({ type: "enum", enum: MarketStatus, default: MarketStatus.UPCOMING })
+  status: MarketStatus;
+
+  @Column({ type: "decimal", precision: 18, scale: 2, default: 0 })
+  totalPool: number;
+
+  @Column({ type: "decimal", precision: 5, scale: 2, default: 5 })
+  houseEdgePct: number; // e.g. 5 = 5%
+
+  @Column({ nullable: true })
+  resolvedOutcomeId: string;
+
+  @Column({ type: "timestamptz", nullable: true })
+  opensAt: Date;
+
+  @Column({ type: "timestamptz", nullable: true })
+  closesAt: Date;
+
+  @Column({ type: "timestamptz", nullable: true })
+  resolvedAt: Date;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  @OneToMany(() => Outcome, (o) => o.market, { cascade: true, eager: true })
+  outcomes: Outcome[];
+
+  @OneToMany(() => Bet, (b) => b.market)
+  bets: Bet[];
+}

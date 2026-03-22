@@ -1,0 +1,39 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+} from "typeorm";
+import { Market } from "./market.entity";
+import { Bet } from "./bet.entity";
+
+@Entity("outcomes")
+export class Outcome {
+  @PrimaryGeneratedColumn("uuid")
+  id: string;
+
+  @Column()
+  label: string;
+
+  @Column({ type: "decimal", precision: 18, scale: 2, default: 0 })
+  totalBetAmount: number;
+
+  // Calculated odds = (totalPool * (1 - houseEdge)) / outcomePool
+  @Column({ type: "decimal", precision: 10, scale: 4, default: 0 })
+  currentOdds: number;
+
+  @Column({ default: false })
+  isWinner: boolean;
+
+  @ManyToOne(() => Market, (m) => m.outcomes, { onDelete: "CASCADE" })
+  @JoinColumn()
+  market: Market;
+
+  @Column()
+  marketId: string;
+
+  @OneToMany(() => Bet, (b) => b.outcome)
+  bets: Bet[];
+}
