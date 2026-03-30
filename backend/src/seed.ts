@@ -38,7 +38,6 @@ async function seed() {
       lastName: "Admin",
       username: "admin",
       isAdmin: true,
-      balance: 99999,
     });
     await userRepo.save(admin);
     console.log("✅ Admin user created (username: admin)");

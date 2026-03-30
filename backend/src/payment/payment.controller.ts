@@ -6,6 +6,7 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  HttpException,
   Request,
   UseGuards,
   Headers,
@@ -18,6 +19,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards';
 import { DKBankPaymentService } from './dkbank-payment.service';
 import { DKGatewayService } from './services/dk-gateway/dk-gateway.service';
+import { RedisService } from '../redis/redis.service';
 
 // DTO class for DK Bank payment initiation
 class InitiatePaymentDto {
@@ -96,7 +98,18 @@ export class PaymentController {
     private readonly configService: ConfigService,
     private readonly dkBankPaymentService: DKBankPaymentService,
     private readonly dkGatewayService: DKGatewayService,
+    private readonly redis: RedisService,
   ) {}
+
+  private async enforceRateLimit(key: string, max: number, windowSec: number): Promise<void> {
+    const { allowed } = await this.redis.rateLimit(key, max, windowSec);
+    if (!allowed) {
+      throw new HttpException(
+        `Too many requests. Max ${max} per ${windowSec}s.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
 
   @Post('dkbank/initiate')
   @UseGuards(JwtAuthGuard)
@@ -105,6 +118,8 @@ export class PaymentController {
   @ApiBody({ type: InitiatePaymentDto })
   @ApiResponse({ status: 200, description: 'Payment initiated — OTP sent to customer' })
   async initiateDKBankPayment(@Body() paymentData: InitiatePaymentDto, @Request() req) {
+    // 5 payment initiations per minute per user
+    await this.enforceRateLimit(`payment:initiate:${req.user.userId}`, 5, 60);
     return this.dkBankPaymentService.initiatePayment(req.user.userId, {
       amount: paymentData.amount,
       customerPhone: paymentData.customerPhone,
@@ -121,6 +136,8 @@ export class PaymentController {
   @ApiBody({ type: ConfirmPaymentDto })
   @ApiResponse({ status: 200, description: 'Payment submitted to DK Bank' })
   async confirmDKBankPayment(@Body() dto: ConfirmPaymentDto, @Request() req) {
+    // 10 OTP confirmation attempts per minute per user (allow retries)
+    await this.enforceRateLimit(`payment:confirm:${req.user.userId}`, 10, 60);
     return this.dkBankPaymentService.confirmPayment(req.user.userId, dto.paymentId, dto.otp);
   }
 
@@ -142,13 +159,16 @@ export class PaymentController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "DK client inquiry by CID" })
   @ApiBody({ type: ClientInquiryDto })
-  async clientInquiry(@Body() dto: ClientInquiryDto) {
+  async clientInquiry(@Body() dto: ClientInquiryDto, @Request() req) {
     if (!dto?.id_type || dto.id_type !== "CID") {
       throw new BadRequestException(`id_type must be "CID"`);
     }
     if (!dto?.id_number || dto.id_number.length < 11) {
       throw new BadRequestException(`id_number must be 11 digits`);
     }
+    // 20 CID lookups per minute per IP
+    const ip = req.ip || req.connection?.remoteAddress || "unknown";
+    await this.enforceRateLimit(`client-inquiry:${ip}`, 20, 60);
 
     return this.dkGatewayService.clientInquiry(dto);
   }

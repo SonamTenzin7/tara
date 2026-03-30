@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, HashRouter } from 'react-router-dom';
 import { useLaunchParams } from '@tma.js/sdk-react';
 import { AppRoot } from '@telegram-apps/telegram-ui';
+import { PwaBottomNav } from '@/pwa/components/PwaBottomNav';
 
 import { routes } from '@/tma/navigation/routes.tsx';
 
@@ -13,10 +14,13 @@ export function App() {
       platform={['macos', 'ios'].includes(lp.tgWebAppPlatform) ? 'ios' : 'base'}
     >
       <HashRouter>
-        <Routes>
-          {routes.map((route) => <Route key={route.path} {...route} />)}
-          <Route path="*" element={<Navigate to="/"/>}/>
-        </Routes>
+        <div style={{ paddingBottom: 80, minHeight: '100vh', position: 'relative' }}>
+          <Routes>
+            {routes.map((route) => <Route key={route.path} {...route} />)}
+            <Route path="*" element={<Navigate to="/"/>}/>
+          </Routes>
+        </div>
+        <PwaBottomNav />
       </HashRouter>
     </AppRoot>
   );

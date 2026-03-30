@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { BullModule } from "@nestjs/bullmq";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
 import { MarketsModule } from "./markets/markets.module";
@@ -9,6 +10,8 @@ import { BetsModule } from "./bets/bets.module";
 import { AdminModule } from "./admin/admin.module";
 import { TelegramModule } from "./telegram/telegram.module";
 import { PaymentModule } from "./payment/payment.module";
+import { RedisModule } from "./redis/redis.module";
+import { JobsModule } from "./jobs/jobs.module";
 import { User } from "./entities/user.entity";
 import { AuthMethod } from "./entities/auth-method.entity";
 import { Market } from "./entities/market.entity";
@@ -25,6 +28,24 @@ import { PaymentOtp } from "./entities/payment-otp.entity";
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    RedisModule,
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const url = config.get<string>("REDIS_URL", "redis://localhost:6379");
+        // Parse host/port from URL for BullMQ connection config
+        const parsed = new URL(url);
+        return {
+          connection: {
+            host: parsed.hostname || "localhost",
+            port: parseInt(parsed.port || "6379", 10),
+            password: parsed.password || undefined,
+          },
+        };
+      },
+    }),
+    JobsModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

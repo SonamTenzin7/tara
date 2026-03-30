@@ -93,12 +93,12 @@ export function PayoutBreakdown({ market, outcomeId, betAmount }: {
             Calculation
           </div>
           <Row label="Gross payout" value={nu(grossPayout)} />
-          <Row label={`House edge (${houseEdgePct}%)`} value={`−${nu(houseDeduction)}`} muted />
+          <Row label={`Platform fee (${houseEdgePct}%)`} value={`−${nu(houseDeduction)}`} muted />
           <div style={{ height: 1, background: '#e5e7eb', margin: '6px 0' }} />
           <Row label="Est. payout if win" value={nu(netPayout)} bold green />
           <Row label="Est. profit" value={`+${nu(profit)}`} bold green />
 
-          <div style={{
+          {/* <div style={{
             marginTop: 10, padding: '7px 10px', background: '#eff6ff',
             borderRadius: 6, border: '1px solid #bfdbfe',
           }}>
@@ -107,7 +107,7 @@ export function PayoutBreakdown({ market, outcomeId, betAmount }: {
               (bet ÷ new {outcome.label} pool) × new total pool × (1 − house%)<br />
               ({betAmount} ÷ {newOutcomePool.toFixed(0)}) × {newTotalPool.toFixed(0)} × {(1 - houseEdgePct / 100).toFixed(2)} = {nu(netPayout)}
             </div>
-          </div>
+          </div> */}
         </div>
       )}
     </div>

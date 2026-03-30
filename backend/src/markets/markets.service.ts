@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
+import { RedisService } from "../redis/redis.service";
 import {
   IsString,
   IsOptional,
@@ -91,7 +92,14 @@ export class MarketsService {
     private engine: ParimutuelEngine,
     private lmsrService: LMSRService,
     private dataSource: DataSource,
+    private redis: RedisService,
   ) {}
+
+  private async invalidateMarketCache(marketId?: string): Promise<void> {
+    const keys = ["tara:cache:markets:all"];
+    if (marketId) keys.push(`tara:cache:market:${marketId}`);
+    await this.redis.del(...keys);
+  }
 
   async create(dto: CreateMarketDto): Promise<Market> {
     if (!dto.outcomes || !Array.isArray(dto.outcomes)) {
@@ -137,6 +145,7 @@ export class MarketsService {
 
       const saved = await this.marketRepo.save(market);
       console.log(`✅ Market created successfully: ${saved.id}`);
+      await this.invalidateMarketCache();
       return this.findOne(saved.id);
     } catch (err) {
       console.error("❌ Error in MarketsService.create:", err);
@@ -144,16 +153,24 @@ export class MarketsService {
     }
   }
 
-  findAll(): Promise<Market[]> {
-    return this.marketRepo.find({ order: { createdAt: "DESC" } });
+  async findAll(): Promise<Market[]> {
+    const cached = await this.redis.getJson<Market[]>("tara:cache:markets:all");
+    if (cached) return cached;
+    const markets = await this.marketRepo.find({ order: { createdAt: "DESC" } });
+    await this.redis.setJsonEx("tara:cache:markets:all", 30, markets);
+    return markets;
   }
 
   async findOne(id: string): Promise<Market> {
+    const cacheKey = `tara:cache:market:${id}`;
+    const cached = await this.redis.getJson<Market>(cacheKey);
+    if (cached) return cached;
     const market = await this.marketRepo.findOne({
       where: { id },
       relations: ["outcomes"],
     });
     if (!market) throw new NotFoundException("Market not found");
+    await this.redis.setJsonEx(cacheKey, 30, market);
     return market;
   }
 
@@ -168,27 +185,38 @@ export class MarketsService {
     if (dto.houseEdgePct !== undefined) market.houseEdgePct = dto.houseEdgePct;
     if (dto.liquidityParam !== undefined) market.liquidityParam = dto.liquidityParam;
 
-    return this.marketRepo.save(market);
+    const saved = await this.marketRepo.save(market);
+    await this.invalidateMarketCache(id);
+    return saved;
   }
 
   async placeBet(userId: string, marketId: string, dto: PlaceBetDto) {
     return this.engine.placeBet(userId, marketId, dto.outcomeId, dto.amount);
+    // cache invalidation handled inside ParimutuelEngine.placeBet
   }
 
-  transition(marketId: string, to: MarketStatus) {
-    return this.engine.transitionMarket(marketId, to);
+  async transition(marketId: string, to: MarketStatus) {
+    const result = await this.engine.transitionMarket(marketId, to);
+    await this.invalidateMarketCache(marketId);
+    return result;
   }
 
-  proposeResolution(marketId: string, proposedOutcomeId: string) {
-    return this.engine.proposeResolution(marketId, proposedOutcomeId);
+  async proposeResolution(marketId: string, proposedOutcomeId: string) {
+    const result = await this.engine.proposeResolution(marketId, proposedOutcomeId);
+    await this.invalidateMarketCache(marketId);
+    return result;
   }
 
-  resolve(marketId: string, winningOutcomeId: string) {
-    return this.engine.resolveMarket(marketId, winningOutcomeId);
+  async resolve(marketId: string, winningOutcomeId: string) {
+    const result = await this.engine.resolveMarket(marketId, winningOutcomeId);
+    await this.invalidateMarketCache(marketId);
+    return result;
   }
 
-  cancel(marketId: string) {
-    return this.engine.cancelMarket(marketId);
+  async cancel(marketId: string) {
+    const result = await this.engine.cancelMarket(marketId);
+    await this.invalidateMarketCache(marketId);
+    return result;
   }
 
   async submitDispute(userId: string, marketId: string, dto: SubmitDisputeDto): Promise<Dispute> {
@@ -270,5 +298,6 @@ export class MarketsService {
   async delete(id: string): Promise<void> {
     const market = await this.findOne(id);
     await this.marketRepo.remove(market);
+    await this.invalidateMarketCache(id);
   }
 }

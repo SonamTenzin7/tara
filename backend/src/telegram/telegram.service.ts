@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { HttpService } from '@nestjs/axios'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository } from 'typeorm'
+import { Repository, Not, IsNull } from 'typeorm'
 import { User } from '../entities/user.entity'
 import { Market, MarketStatus } from '../entities/market.entity'
 import { Bet, BetStatus } from '../entities/bet.entity'
@@ -100,7 +100,7 @@ export class TelegramService {
 
   async sendMarketAnnouncement(market: Market): Promise<void> {
     const users = await this.userRepository.find({ 
-      where: { telegramId: { $neq: null } } 
+      where: { telegramId: Not(IsNull()) }
     })
     
     const message = this.formatMarketAnnouncement(market)
@@ -181,7 +181,7 @@ export class TelegramService {
     const [_, marketId, outcome] = callbackData.split('_')
     
     const market = await this.marketRepository.findOne({ where: { id: marketId } })
-    if (!market || market.status !== 'OPEN') {
+    if (!market || market.status !== MarketStatus.OPEN) {
       return
     }
 
@@ -203,7 +203,7 @@ export class TelegramService {
     const bets = await this.betRepository.find({ 
       where: { userId: user.id },
       relations: ['market'],
-      order: { createdAt: 'DESC' as any },
+      order: { placedAt: 'DESC' },
       take: 10
     })
 
@@ -245,7 +245,7 @@ export class TelegramService {
 
   private formatBetResult(bet: Bet, market: Market): string {
     const outcome = market.outcomes.find(o => o.id === bet.outcomeId)
-    const result = bet.status === 'WON' ? '✅ WON' : '❌ LOST'
+    const result = bet.status === BetStatus.WON ? '✅ WON' : '❌ LOST'
     const amount = bet.amount.toLocaleString()
     
     return `🎯 <b>Bet Result</b>\n\n` +
@@ -257,7 +257,7 @@ export class TelegramService {
 
   private formatPortfolioView(user: User, bets: Bet[]): string {
     const totalBets = bets.length
-    const wonBets = bets.filter(b => b.status === 'WON').length
+    const wonBets = bets.filter(b => b.status === BetStatus.WON).length
     const winRate = totalBets > 0 ? ((wonBets / totalBets) * 100).toFixed(1) : '0'
     const streak = user.telegramStreak || 0
     
@@ -277,7 +277,7 @@ export class TelegramService {
 
     return {
       inline_keyboard: [
-        ...keyboard.map(k => [k]),
+        ...keyboard,
         [{ text: '📊 View All Markets', callback_data: 'view_markets' }],
         [{ text: '💼 My Portfolio', callback_data: 'view_portfolio' }]
       ]
@@ -296,7 +296,7 @@ export class TelegramService {
       }]
     })
 
-    return { inline_keyboard: keyboard.map(k => [k]) }
+    return { inline_keyboard: keyboard }
   }
 
   async broadcastMessage(message: string, targetUsers?: string[]): Promise<void> {

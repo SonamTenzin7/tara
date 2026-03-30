@@ -14,7 +14,21 @@
     "migration:run": "npm run typeorm migration:run",
     "migration:revert": "npm run typeorm migration:revert",
     "migration:show": "npm run typeorm migration:show",
-    "migrations": "npm run migration:run"
+    "migrations": "npm run migration:run",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
+    },
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1"
+    }
   },
   "keywords": [],
   "author": "",
@@ -22,6 +36,7 @@
   "type": "commonjs",
   "dependencies": {
     "@nestjs/axios": "^3.1.3",
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.1.17",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.1.17",
@@ -33,8 +48,10 @@
     "@nestjs/typeorm": "^11.0.0",
     "@types/sqlite3": "^3.1.11",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.71.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
+    "ioredis": "^5.10.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.20.0",
@@ -46,11 +63,14 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.16",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",
     "@types/passport-jwt": "^4.0.1",
     "axios": "^1.13.6",
+    "jest": "^30.3.0",
     "jsonwebtoken": "^9.0.3",
     "rimraf": "^6.1.3",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "~4.9.5"

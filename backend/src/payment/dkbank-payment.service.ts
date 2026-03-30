@@ -18,6 +18,18 @@ import {
 import { Transaction, TransactionType } from "../entities/transaction.entity";
 import { PaymentOtp, OtpStatus } from "../entities/payment-otp.entity";
 import { DKGatewayService } from "./services/dk-gateway/dk-gateway.service";
+import { RedisService } from "../redis/redis.service";
+
+/** Shape stored in Redis for an active OTP session. */
+interface OtpSession {
+  status: OtpStatus;
+  expiresAt: string; // ISO
+  bfsTxnId: string | null;
+  failedAttempts: number;
+  userId: string;
+}
+
+const otpSessionKey = (paymentId: string) => `tara:otp:${paymentId}`;
 
 /** OTP window: 10 minutes to match typical DK Bank OTP validity. */
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -67,6 +79,7 @@ export class DKBankPaymentService {
     private readonly dataSource: DataSource,
     private readonly dkGateway: DKGatewayService,
     private readonly configService: ConfigService,
+    private readonly redis: RedisService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(PaymentOtp) private readonly otpRepo: Repository<PaymentOtp>,
@@ -127,19 +140,27 @@ export class DKBankPaymentService {
 
       // Record OTP as immediately verified (staging has no real OTP)
       const now = new Date();
+      const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
       await this.otpRepo.save(this.otpRepo.create({
         paymentId: payment.id,
         userId,
         marketId: dto.marketId || null,
         disputeId: dto.disputeId || null,
         status: OtpStatus.VERIFIED,
-        expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+        expiresAt,
         lastRequestedAt: now,
         verifiedAt: now,
         requestCount: 1,
         failedAttempts: 0,
         bfsTxnId: null,
       }));
+      await this.redis.setJsonEx<OtpSession>(otpSessionKey(payment.id), OTP_TTL_MS / 1000, {
+        status: OtpStatus.VERIFIED,
+        expiresAt: expiresAt.toISOString(),
+        bfsTxnId: null,
+        failedAttempts: 0,
+        userId,
+      });
 
       return {
         success: true,
@@ -186,19 +207,28 @@ export class DKBankPaymentService {
 
       // 4) Create the OTP tracking record
       const now = new Date();
+      const otpExpiresAt = new Date(now.getTime() + OTP_TTL_MS);
       await this.otpRepo.save(this.otpRepo.create({
         paymentId: payment.id,
         userId,
         marketId: dto.marketId || null,
         disputeId: dto.disputeId || null,
         status: OtpStatus.PENDING,
-        expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+        expiresAt: otpExpiresAt,
         lastRequestedAt: now,
         verifiedAt: null,
         requestCount: 1,
         failedAttempts: 0,
         bfsTxnId: auth.bfsTxnId,
       }));
+      // Mirror in Redis for fast validation in confirmPayment
+      await this.redis.setJsonEx<OtpSession>(otpSessionKey(payment.id), OTP_TTL_MS / 1000, {
+        status: OtpStatus.PENDING,
+        expiresAt: otpExpiresAt.toISOString(),
+        bfsTxnId: auth.bfsTxnId,
+        failedAttempts: 0,
+        userId,
+      });
 
       return {
         success: true,
@@ -247,14 +277,32 @@ export class DKBankPaymentService {
 
     this.logger.log(`[OTP] paymentId=${paymentId} otp=${otp}`);
 
-    // Load the OTP tracking record for this payment
+    // Fast-path: check Redis session first; fall back to DB if Redis is unavailable.
+    const redisSession = await this.redis.getJson<OtpSession>(otpSessionKey(paymentId));
+
+    if (redisSession) {
+      // Ownership check
+      if (redisSession.userId !== userId) {
+        throw new BadRequestException("Payment not found");
+      }
+      // Expiry check from Redis TTL value
+      if (redisSession.status === OtpStatus.PENDING && new Date(redisSession.expiresAt) < new Date()) {
+        await this.redis.del(otpSessionKey(paymentId));
+        // Update DB record too
+        const dbOtp = await this.otpRepo.findOne({ where: { paymentId, userId }, order: { createdAt: "DESC" } });
+        if (dbOtp) { dbOtp.status = OtpStatus.EXPIRED; await this.otpRepo.save(dbOtp); }
+        throw new BadRequestException("OTP has expired. Please initiate a new payment.");
+      }
+    }
+
+    // Load the OTP tracking record for this payment (DB — kept as audit log)
     const otpRecord = await this.otpRepo.findOne({
       where: { paymentId, userId },
       order: { createdAt: "DESC" },
     });
 
-    // Guard: check OTP session hasn't expired
-    if (otpRecord && otpRecord.status === OtpStatus.PENDING && otpRecord.expiresAt < new Date()) {
+    // Guard: check OTP session hasn't expired (DB fallback when Redis miss)
+    if (!redisSession && otpRecord && otpRecord.status === OtpStatus.PENDING && otpRecord.expiresAt < new Date()) {
       otpRecord.status = OtpStatus.EXPIRED;
       await this.otpRepo.save(otpRecord);
       throw new BadRequestException("OTP has expired. Please initiate a new payment.");
@@ -279,6 +327,10 @@ export class DKBankPaymentService {
         otpRecord.verifiedAt = now;
         await this.otpRepo.save(otpRecord);
       }
+      // Remove Redis session on verification
+      await this.redis.del(otpSessionKey(payment.id));
+      // Invalidate balance cache
+      await this.redis.del(`tara:cache:balance:${userId}`);
 
       return {
         success: true,
@@ -321,6 +373,8 @@ export class DKBankPaymentService {
         otpRecord.verifiedAt = now;
         await this.otpRepo.save(otpRecord);
       }
+      // Remove OTP session from Redis on successful verification
+      await this.redis.del(otpSessionKey(payment.id));
 
       return {
         success: true,
@@ -343,10 +397,17 @@ export class DKBankPaymentService {
       };
       await this.paymentRepo.save(payment);
 
-      // Increment failed attempts on the OTP record
+      // Increment failed attempts on the OTP record (DB + Redis)
       if (otpRecord && otpRecord.status === OtpStatus.PENDING) {
         otpRecord.failedAttempts += 1;
         await this.otpRepo.save(otpRecord);
+        if (redisSession) {
+          await this.redis.setJsonEx<OtpSession>(
+            otpSessionKey(payment.id),
+            Math.max(1, Math.floor((new Date(redisSession.expiresAt).getTime() - Date.now()) / 1000)),
+            { ...redisSession, failedAttempts: otpRecord.failedAttempts },
+          );
+        }
       }
 
       throw e;
@@ -523,6 +584,9 @@ export class DKBankPaymentService {
           userId: params.userId,
           note: `DK Bank deposit confirmed (dk_payment: ${payment.id})`,
         }));
+
+        // Invalidate cached balance so the next /users/me returns the updated value
+        await this.redis.del(`tara:cache:balance:${params.userId}`);
       } else if (mapped === PaymentStatus.FAILED) {
         payment.status = PaymentStatus.FAILED;
         payment.failureReason = params.dkStatusDesc || "Payment failed";
