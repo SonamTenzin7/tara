@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { HttpService } from '@nestjs/axios'
+import { firstValueFrom } from 'rxjs'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { User } from '../entities/user.entity'
@@ -137,7 +138,7 @@ export class TelegramChannelService {
   private async getBotInfo(): Promise<any> {
     try {
       const url = `https://api.telegram.org/bot${this.botToken}/getMe`
-      const response = await this.httpService.get(url)
+      const response = await firstValueFrom(this.httpService.get(url))
       return response.data.result
     } catch (error) {
       this.logger.error('Failed to get bot info', error)
@@ -148,9 +149,9 @@ export class TelegramChannelService {
   private async getChannelInfo(): Promise<any> {
     try {
       const url = `https://api.telegram.org/bot${this.botToken}/getChat`
-      const response = await this.httpService.post(url, {
+      const response = await firstValueFrom(this.httpService.post(url, {
         chat_id: this.channelId
-      })
+      }))
       return response.data.result
     } catch (error) {
       this.logger.error('Failed to get channel info', error)
@@ -285,7 +286,7 @@ ${winningOutcome?.label || 'Pending'}
 
 💰 <b>Final Pool Size:</b> $${market.totalPool || 'TBD'}
 
-📈 <b>Total Bets:</b> ${market.totalBets || 'TBD'}
+📈 <b>Total Bets:</b> ${market.bets?.length ?? 'TBD'}
 
 ⏰ <b>Resolved:</b> ${resolvedAt}
 

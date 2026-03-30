@@ -1,27 +1,16 @@
 import { FC, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import {
-  Section,
-  Cell,
-  List,
-  Spinner,
-  Placeholder,
-  Caption,
-  Title,
-} from "@telegram-apps/telegram-ui";
+import { Spinner, Placeholder } from "@telegram-apps/telegram-ui";
 import { Page } from "@/tma/components/Page";
 import { getMarket, getDisputes, submitDispute, Market, Dispute } from "@/api/client";
-import { useAuth } from "@/tma/hooks/useAuth";
 import { Link } from "@/tma/components/Link/Link";
 
 export const MarketDetailPage: FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
   const [market, setMarket] = useState<Market | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedOutcomeId, setSelectedOutcomeId] = useState<string | null>(null);
-  const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [, setDisputes] = useState<Dispute[]>([]);
   const [bondAmount, setBondAmount] = useState("10");
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
@@ -85,7 +74,6 @@ export const MarketDetailPage: FC = () => {
     );
   }
 
-  const canBet = market.status === "open" && user;
   const isResolving = market.status === "resolving";
 
   const proposedOutcome = isResolving && market.proposedOutcomeId
@@ -101,244 +89,131 @@ export const MarketDetailPage: FC = () => {
     return `${h}h ${m}m remaining`;
   })();
 
+  const isOpen = market.status === "open";
+
   return (
     <Page back={true}>
-      <List>
-        <Section
-          header="Market Details"
-          footer={`House edge: ${market.houseEdgePct}% · Total pool: ${market.totalPool}`}
-        >
-          <div style={{ padding: "1rem" }}>
-            <Title level="2" weight="1">
-              {market.title}
-            </Title>
-            <Caption
-              level="2"
-              style={{ marginTop: "0.5rem", display: "block" }}
-            >
-              Status: <strong>{market.status.toUpperCase()}</strong>
-            </Caption>
-            {market.opensAt && (
-              <Caption level="2" style={{ display: "block" }}>
-                Opens: {new Date(market.opensAt).toLocaleString()}
-              </Caption>
-            )}
-            {market.closesAt && (
-              <Caption level="2" style={{ display: "block" }}>
-                Closes: {new Date(market.closesAt).toLocaleString()}
-              </Caption>
+      <div style={{ position: "relative", minHeight: "100vh", padding: "0 0 100px" }}>
+        <div className="mesh-bg" />
+        
+        <div style={{ padding: "24px 16px", display: "flex", flexDirection: "column", gap: 24, position: "relative" }}>
+          {/* Header Section */}
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "20px", boxShadow: "var(--shadow-premium)", backdropFilter: "var(--glass-blur)" }}>
+            <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Market Details</div>
+            <h1 style={{ fontSize: "1.4rem", fontWeight: 900, color: "var(--text-main)", marginBottom: 12, lineHeight: 1.2, fontFamily: "var(--font-display)" }}>{market.title}</h1>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ background: "var(--bg-secondary)", padding: "4px 10px", borderRadius: 8, fontSize: "0.75rem", fontWeight: 800, color: isOpen ? "#22c55e" : isResolving ? "#f59e0b" : "var(--text-muted)" }}>
+                {market.status.toUpperCase()}
+              </div>
+              <div style={{ background: "var(--bg-secondary)", padding: "4px 10px", borderRadius: 8, fontSize: "0.75rem", fontWeight: 800, color: "var(--text-main)" }}>
+                Nu {Number(market.totalPool).toLocaleString()}
+              </div>
+            </div>
+            {market.description && (
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", lineHeight: 1.5, marginTop: 16, fontWeight: 500 }}>{market.description}</p>
             )}
           </div>
-        </Section>
 
-        {/* Payment Options - Show when market is open */}
-        {market.status === "open" && (
-          <Section header="Choose Payment Method">
-            <div
-              style={{
-                padding: "1rem",
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: "0.75rem",
-              }}
-            >
-              <Link to={`/dkbank-bet/${market.id}`}>
-                <button
-                  style={{
-                    width: "100%",
-                    padding: "1rem 0.5rem",
-                    background: "#FF6B35",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "12px",
-                    fontSize: "0.85rem",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <span style={{ fontSize: "1.5rem" }}></span>
-                  <span>DK Bank</span>
-                </button>
-              </Link>
-              <Link to={`/ton-bet/${market.id}`}>
-                <button
-                  style={{
-                    width: "100%",
-                    padding: "1rem 0.5rem",
-                    background: "#0098EA",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "12px",
-                    fontSize: "0.85rem",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <span style={{ fontSize: "1.5rem" }}></span>
-                  <span>TON</span>
-                </button>
-              </Link>
-              <Link to={`/market/${market.id}`}>
-                <button
-                  style={{
-                    width: "100%",
-                    padding: "1rem 0.5rem",
-                    background: "#007AFF",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "12px",
-                    fontSize: "0.85rem",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <span style={{ fontSize: "1.5rem" }}></span>
-                  <span>Credits</span>
-                </button>
-              </Link>
+          {/* Betting Options */}
+          {isOpen && (
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "20px", boxShadow: "var(--shadow-premium)" }}>
+              <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>Payment Method</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                <Link to={`/dkbank-bet/${market.id}`} style={{ textDecoration: "none" }}>
+                  <button style={{ width: "100%", padding: "16px 8px", background: "linear-gradient(135deg, #ff8c00, #ff4500)", color: "#fff", border: "none", borderRadius: 12, fontSize: "0.75rem", fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 12px rgba(255,140,0,0.3)" }}>
+                    DK BANK
+                  </button>
+                </Link>
+                <Link to={`/ton-bet/${market.id}`} style={{ textDecoration: "none" }}>
+                  <button style={{ width: "100%", padding: "16px 8px", background: "linear-gradient(135deg, #00b4ed, #0072bc)", color: "#fff", border: "none", borderRadius: 12, fontSize: "0.75rem", fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 12px rgba(0,180,237,0.3)" }}>
+                    TON
+                  </button>
+                </Link>
+                <Link to={`/market/${market.id}`} style={{ textDecoration: "none" }}>
+                  <button style={{ width: "100%", padding: "16px 8px", background: "linear-gradient(135deg, #3b82f6, #1d4ed8)", color: "#fff", border: "none", borderRadius: 12, fontSize: "0.75rem", fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 12px rgba(59,130,246,0.3)" }}>
+                    CREDITS
+                  </button>
+                </Link>
+              </div>
             </div>
-          </Section>
-        )}
+          )}
 
-        <Section header="Outcomes">
-          {market.outcomes.map((outcome) => {
-            const isSelected = selectedOutcomeId === outcome.id;
+          {/* Outcomes */}
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "20px", boxShadow: "var(--shadow-premium)" }}>
+            <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 20 }}>Outcomes</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {market.outcomes.map((outcome, idx) => {
+                const totalBets = Number(market.totalPool);
+                const pct = totalBets > 0 ? (Number(outcome.totalBetAmount) / totalBets) * 100 : 100 / market.outcomes.length;
+                const colors = ["#22c55e", "#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6"];
+                const color = colors[idx % colors.length];
+                
+                return (
+                  <div key={outcome.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ fontWeight: 800, color: "var(--text-main)", fontSize: "0.95rem" }}>{outcome.label}</span>
+                      <span style={{ fontWeight: 900, color: color, fontSize: "0.95rem" }}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <div style={{ background: "var(--bg-secondary)", height: 8, borderRadius: 10, overflow: "hidden" }}>
+                      <div style={{ background: color, width: `${pct}%`, height: "100%", borderRadius: 10, transition: "width 1s" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-            // Use LMSR probability if available, fallback to parimutuel calculation
-            const lmsrProb = Number(outcome.lmsrProbability || 0);
-            const probability =
-              lmsrProb > 0
-                ? lmsrProb
-                : Number(market.totalPool) > 0
-                  ? Number(outcome.totalBetAmount) / Number(market.totalPool)
-                  : 0.5;
-            const probabilityPercent = (probability * 100).toFixed(1);
-
-            // Calculate decimal odds from probability
-            const decimalOdds =
-              probability > 0 ? (1 / probability).toFixed(2) : "—";
-
-            return (
-              <Cell
-                key={outcome.id}
-                onClick={() => canBet && setSelectedOutcomeId(outcome.id)}
-                subtitle={`${probabilityPercent}% · ${decimalOdds}x odds`}
-                after={
-                  outcome.isWinner ? (
-                    <span style={{ color: "#4CAF50", fontWeight: "bold" }}>
-                      ✓ Winner
-                    </span>
-                  ) : canBet ? (
-                    <input
-                      type="radio"
-                      checked={isSelected}
-                      onChange={() => setSelectedOutcomeId(outcome.id)}
-                    />
-                  ) : null
-                }
-                style={{
-                  backgroundColor: isSelected
-                    ? "rgba(0, 122, 255, 0.1)"
-                    : undefined,
-                  cursor: canBet ? "pointer" : "default",
-                }}
-              >
-                {outcome.label}
-              </Cell>
-            );
-          })}
-        </Section>
-
-        {isResolving && (
-          <Section header={`Dispute Window — ${disputeTimeLeft ?? ""}`}>
-            <div style={{ padding: "12px 16px" }}>
-              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 10 }}>
-                Proposed outcome:{" "}
-                <strong style={{ color: "#16a34a" }}>
-                  {proposedOutcome?.label ?? "Pending"}
-                </strong>
-              </div>
-              <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14 }}>
-                {disputes.length} dispute{disputes.length !== 1 ? "s" : ""} submitted
-              </div>
-              {disputeSuccess ? (
-                <div style={{ color: "#16a34a", fontWeight: 600, fontSize: 13, padding: "10px 0" }}>
-                  Dispute submitted. Bond will be refunded after resolution.
+          {/* Dispute Section */}
+          {isResolving && (
+            <div style={{ background: "#fff9eb", border: "1.5px solid #fcd34d", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-premium)" }}>
+              <div style={{ background: "#fef3c7", padding: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 900, color: "#92400e", fontSize: "0.85rem", textTransform: "uppercase" }}>Dispute Window</div>
+                  <div style={{ fontSize: "0.75rem", color: "#b45309", fontWeight: 700 }}>{disputeTimeLeft}</div>
                 </div>
-              ) : (
-                <>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>
-                      Bond Amount (credits)
-                    </label>
+                <div style={{ fontSize: "1.5rem" }}>⚖️</div>
+              </div>
+              
+              <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ fontSize: "0.85rem", color: "#b45309", fontWeight: 600 }}>
+                  Proposed: <strong style={{ color: "#b45309", fontSize: "1rem" }}>{proposedOutcome?.label ?? "Pending"}</strong>
+                </div>
+                
+                {disputeSuccess ? (
+                  <div style={{ background: "#ecfdf5", padding: "12px", borderRadius: 10, color: "#065f46", fontSize: "0.85rem", fontWeight: 700, textAlign: "center" }}>
+                    ✅ Dispute Submitted
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <input
                       type="number"
-                      min="1"
                       value={bondAmount}
                       onChange={(e) => setBondAmount(e.target.value)}
-                      style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 14, outline: "none" }}
+                      placeholder="Bond (Nu)"
+                      style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #fde68a", fontSize: "0.9rem", fontWeight: 700, outline: "none" }}
                     />
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: "#6b7280", display: "block", marginBottom: 4 }}>
-                      Reason (optional)
-                    </label>
                     <textarea
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
+                      placeholder="Reason (optional)"
                       rows={2}
-                      placeholder="Why do you think this outcome is wrong?"
-                      style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 13, outline: "none", resize: "none", fontFamily: "inherit" }}
+                      style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #fde68a", fontSize: "0.9rem", outline: "none", resize: "none" }}
                     />
+                    {disputeError && <div style={{ color: "#ef4444", fontSize: "0.75rem", fontWeight: 700 }}>{disputeError}</div>}
+                    <button
+                      onClick={handleSubmitDispute}
+                      disabled={disputeSubmitting}
+                      style={{ width: "100%", padding: "14px", borderRadius: 12, background: "#f59e0b", color: "#fff", fontWeight: 900, border: "none" }}
+                    >
+                      {disputeSubmitting ? "SUBMITTING..." : "SUBMIT DISPUTE"}
+                    </button>
                   </div>
-                  {disputeError && (
-                    <div style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{disputeError}</div>
-                  )}
-                  <button
-                    onClick={handleSubmitDispute}
-                    disabled={disputeSubmitting}
-                    style={{ width: "100%", padding: "11px", borderRadius: 8, border: "none", background: disputeSubmitting ? "#d1d5db" : "#f59e0b", color: "#fff", fontWeight: 700, fontSize: 14, cursor: disputeSubmitting ? "not-allowed" : "pointer" }}
-                  >
-                    {disputeSubmitting ? "Submitting…" : "Submit Dispute"}
-                  </button>
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8, textAlign: "center" }}>
-                    Bond is always refunded after admin makes the final call.
-                  </div>
-                </>
-              )}
+                )}
+              </div>
             </div>
-          </Section>
-        )}
-
-        {market.status !== "open" && !isResolving && (
-          <Section>
-            <Placeholder
-              header={
-                market.status === "upcoming" ? "Not Open Yet" : "Betting Closed"
-              }
-              description={
-                market.status === "upcoming"
-                  ? "This market will open soon"
-                  : market.status === "resolved" || market.status === "settled"
-                    ? "This market has been resolved"
-                    : "Betting is no longer available"
-              }
-            />
-          </Section>
-        )}
-      </List>
+          )}
+        </div>
+      </div>
     </Page>
   );
 };

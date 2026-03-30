@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
+import { RedisService } from "../redis/redis.service";
 import { Market, MarketStatus } from "../entities/market.entity";
 import { Outcome } from "../entities/outcome.entity";
 import { Bet, BetStatus } from "../entities/bet.entity";
@@ -38,6 +39,7 @@ export class ParimutuelEngine {
     @InjectRepository(Dispute) private disputeRepo: Repository<Dispute>,
     private dataSource: DataSource,
     private lmsrService: LMSRService,
+    private redis: RedisService,
   ) {}
 
   private async getCreditsBalance(em: { getRepository: Function }, userId: string): Promise<number> {
@@ -70,79 +72,104 @@ export class ParimutuelEngine {
     if (amount <= 0)
       throw new BadRequestException("Bet amount must be positive");
 
-    return await this.dataSource.transaction(async (em) => {
-      const market = await em.findOne(Market, {
-        where: { id: marketId },
-        relations: ["outcomes"],
-      });
-      if (!market) throw new BadRequestException("Market not found");
-      if (market.status !== MarketStatus.OPEN)
-        throw new BadRequestException("Market is not open for betting");
+    // Acquire a distributed Redis lock so concurrent bets on the same market
+    // are serialised at the application layer before touching the DB.
+    let lockToken: string | null = null;
+    try {
+      lockToken = await this.redis.acquireLockWithRetry(`market:${marketId}`, 10, 3, 150);
+    } catch (e: any) {
+      if (e?.message === "LOCK_CONTENDED") {
+        throw new BadRequestException("Market is busy, please try again in a moment");
+      }
+      // Redis unavailable — proceed without lock (DB pessimistic lock still protects us)
+    }
 
-      const outcome = market.outcomes.find((o) => o.id === outcomeId);
-      if (!outcome)
-        throw new BadRequestException("Outcome not found in this market");
+    try {
+      return await this.dataSource.transaction(async (em) => {
+        // Pessimistic write lock ensures only one DB transaction modifies this
+        // market's pool at a time, even if the Redis lock is unavailable.
+        const market = await em
+          .getRepository(Market)
+          .createQueryBuilder("m")
+          .setLock("pessimistic_write")
+          .where("m.id = :marketId", { marketId })
+          .leftJoinAndSelect("m.outcomes", "o")
+          .getOne();
+        if (!market) throw new BadRequestException("Market not found");
+        if (market.status !== MarketStatus.OPEN)
+          throw new BadRequestException("Market is not open for betting");
 
-      const user = await em.findOne(User, { where: { id: userId } });
-      if (!user) throw new BadRequestException("User not found");
-      const balanceBefore = await this.getCreditsBalance(em, userId);
-      this.logger.log(`[placeBet] user=${userId} credits=${balanceBefore} betAmount=${amount}`);
-      if (balanceBefore < amount)
-        throw new BadRequestException("Insufficient balance");
+        const outcome = market.outcomes.find((o) => o.id === outcomeId);
+        if (!outcome)
+          throw new BadRequestException("Outcome not found in this market");
 
-      // Update outcome pool
-      outcome.totalBetAmount = Number(outcome.totalBetAmount) + amount;
+        const user = await em.findOne(User, { where: { id: userId } });
+        if (!user) throw new BadRequestException("User not found");
+        const balanceBefore = await this.getCreditsBalance(em, userId);
+        this.logger.log(`[placeBet] user=${userId} credits=${balanceBefore} betAmount=${amount}`);
+        if (balanceBefore < amount)
+          throw new BadRequestException("Insufficient balance");
 
-      // Update market total pool
-      market.totalPool = Number(market.totalPool) + amount;
+        // Update outcome pool
+        outcome.totalBetAmount = Number(outcome.totalBetAmount) + amount;
 
-      // Recalculate odds for all outcomes (parimutuel - for settlement)
-      for (const o of market.outcomes) {
-        o.currentOdds = this.calcOdds(
-          Number(market.totalPool),
-          Number(market.houseEdgePct),
-          Number(o.totalBetAmount),
+        // Update market total pool
+        market.totalPool = Number(market.totalPool) + amount;
+
+        // Recalculate odds for all outcomes (parimutuel - for settlement)
+        for (const o of market.outcomes) {
+          o.currentOdds = this.calcOdds(
+            Number(market.totalPool),
+            Number(market.houseEdgePct),
+            Number(o.totalBetAmount),
+          );
+          await em.save(Outcome, o);
+        }
+
+        // Calculate LMSR probabilities (for display)
+        const lmsrProbs = this.lmsrService.calculateProbabilities(
+          market.outcomes,
+          1000, // Liquidity parameter in BTN
         );
-        await em.save(Outcome, o);
-      }
 
-      // Calculate LMSR probabilities (for display)
-      const lmsrProbs = this.lmsrService.calculateProbabilities(
-        market.outcomes,
-        1000, // Liquidity parameter in BTN
-      );
+        // Update LMSR probabilities for all outcomes
+        for (let i = 0; i < market.outcomes.length; i++) {
+          market.outcomes[i].lmsrProbability = lmsrProbs[i];
+          await em.save(Outcome, market.outcomes[i]);
+        }
 
-      // Update LMSR probabilities for all outcomes
-      for (let i = 0; i < market.outcomes.length; i++) {
-        market.outcomes[i].lmsrProbability = lmsrProbs[i];
-        await em.save(Outcome, market.outcomes[i]);
-      }
+        await em.save(Market, market);
 
-      await em.save(Market, market);
+        // Create bet record
+        const bet = em.create(Bet, {
+          userId,
+          marketId,
+          outcomeId,
+          amount,
+          status: BetStatus.PENDING,
+          oddsAtPlacement: outcome.currentOdds,
+        });
+        const savedBet = await em.save(Bet, bet);
 
-      // Create bet record
-      const bet = em.create(Bet, {
-        userId,
-        marketId,
-        outcomeId,
-        amount,
-        status: BetStatus.PENDING,
-        oddsAtPlacement: outcome.currentOdds,
+        await em.save(Transaction, em.create(Transaction, {
+          type: TransactionType.BET_PLACED,
+          amount: -amount,
+          balanceBefore,
+          balanceAfter: balanceBefore - amount,
+          betId: savedBet.id,
+          userId,
+          note: `Bet on outcome: ${outcome.label}`,
+        }));
+
+        return savedBet;
       });
-      const savedBet = await em.save(Bet, bet);
-
-      await em.save(Transaction, em.create(Transaction, {
-        type: TransactionType.BET_PLACED,
-        amount: -amount,
-        balanceBefore,
-        balanceAfter: balanceBefore - amount,
-        betId: savedBet.id,
-        userId,
-        note: `Bet on outcome: ${outcome.label}`,
-      }));
-
-      return savedBet;
-    });
+    } finally {
+      if (lockToken) await this.redis.releaseLock(`market:${marketId}`, lockToken);
+      // Invalidate market cache so subsequent reads reflect updated pool/odds
+      await this.redis.del("tara:cache:markets:all", `tara:cache:market:${marketId}`);
+      // Invalidate balance cache for the bettor
+      await this.redis.del(`tara:cache:balance:${userId}`);
+    }
   }
 
   // ── Transition market state ───────────────────────────────────────────────

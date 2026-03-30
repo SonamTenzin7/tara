@@ -1,74 +1,81 @@
-import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { PwaFeedPage } from "./pages/PwaFeedPage";
 import { PwaMarketsPage } from "./pages/PwaMarketsPage";
 import { PwaMarketDetailPage } from "./pages/PwaMarketDetailPage";
 import { PwaPaymentTestPage } from "./pages/PwaPaymentTestPage";
-import { AdminPage } from "./pages/AdminPage";
+import { PwaMyBetsPage } from "./pages/PwaMyBetsPage";
+import { PwaWalletPage } from "./pages/PwaWalletPage";
+import { PwaResultsPage } from "./pages/PwaResultsPage";
+import { PwaBottomNav } from "./components/PwaBottomNav";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { useAuth } from "./hooks/useAuth";
 
 import { TonConnectUIProvider } from "@tonconnect/ui-react";
 import { publicUrl } from "@/helpers/publicUrl.ts";
 
 function PwaLayout() {
-  const location = useLocation();
-  const isAdmin = location.pathname.startsWith("/admin");
+  const { isAuthenticated, setIsAuthenticated } = useAuth();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  if (isAdmin) {
-    return (
-      <Routes>
-        <Route path="/admin/*" element={<AdminPage />} />
-      </Routes>
-    );
-  }
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#f5f5f7",
-        color: "#111827",
-        fontFamily: "system-ui, -apple-system, sans-serif",
+        background: "transparent",
+        color: "var(--text-main)",
+        fontFamily: "var(--font-primary)",
       }}
     >
+      <div className="mesh-bg" />
       <header
         style={{
-          background: "#ffffff",
-          borderBottom: "1px solid #f0f0f0",
+          background: "var(--glass-bg)",
+          backdropFilter: "var(--glass-blur)",
+          WebkitBackdropFilter: "var(--glass-blur)",
+          borderBottom: "1px solid var(--glass-border)",
           position: "sticky",
           top: 0,
-          zIndex: 10,
-          boxShadow: "0 1px 8px rgba(0,0,0,0.06)",
+          zIndex: 100,
+          boxShadow: "var(--shadow-sm)",
         }}
       >
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 16px", height: 56, display: "flex", alignItems: "center" }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 20px", height: 64, display: "flex", alignItems: "center" }}>
         {/* Logo + wordmark */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* T icon mark */}
-          <svg width="36" height="36" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-            {/* Green dot */}
+          <svg width="40" height="40" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+            <defs>
+              <linearGradient id="tara-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#3ecf6e" />
+                <stop offset="100%" stopColor="#2b7fdb" />
+              </linearGradient>
+            </defs>
             <circle cx="10" cy="36" r="6" fill="#3ecf6e"/>
-            {/* Blue dot */}
             <circle cx="20" cy="52" r="5" fill="#2b7fdb"/>
-            {/* Green curved left cap of crossbar */}
             <path d="M28,18 C28,10 34,6 42,6 L56,6 L56,22 L42,22 C36,22 28,26 28,18 Z" fill="#3ecf6e"/>
-            {/* Blue right crossbar */}
             <rect x="56" y="6" width="18" height="16" rx="8" fill="#2775d0"/>
-            {/* Vertical stripe left */}
             <rect x="56" y="22" width="8" height="50" rx="3" fill="#1c5bb8"/>
-            {/* Vertical stripe middle */}
             <rect x="67" y="22" width="8" height="50" rx="3" fill="#2775d0"/>
           </svg>
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-            <span style={{ fontWeight: 800, fontSize: "1rem", color: "#111827", letterSpacing: "-0.02em" }}>
+            <span style={{ fontWeight: 800, fontSize: "1.2rem", color: "var(--text-main)", letterSpacing: "-0.03em", fontFamily: "var(--font-display)" }}>
               Tara
             </span>
-            <span style={{ fontSize: "0.6rem", color: "#9ca3af", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
               Parimutuel Predictions
             </span>
           </div>
         </div>
 
-        {/* Right side */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Top nav links - currently empty but reserved for future profile/global actions */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
           <a
             href="https://t.me/Tara_parimutuel_bot"
             target="_blank"
@@ -91,17 +98,52 @@ function PwaLayout() {
             </svg>
             Telegram
           </a>
+          
+          {/* Desktop-only nav links */}
+          {!isMobile && [
+            { to: "/my-bets", label: "My Bets" },
+            { to: "/results", label: "Results" },
+            { to: "/wallet", label: "Wallet" },
+          ].map(({ to, label }) => (
+            <NavLink key={to} to={to} style={({ isActive }) => ({
+              padding: "6px 14px",
+              borderRadius: 20,
+              textDecoration: "none",
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              background: isActive ? "var(--accent, #2775d0)" : "var(--glass-bg)",
+              color: isActive ? "#fff" : "var(--text-subtle)",
+              border: "1px solid var(--glass-border)",
+            })}>
+              {label}
+            </NavLink>
+          ))}
         </div>
+
         </div>
       </header>
 
-      <Routes>
-        <Route path="/" element={<PwaFeedPage />} />
-        <Route path="/markets" element={<PwaMarketsPage />} />
-        <Route path="/market/:id" element={<PwaMarketDetailPage />} />
-        <Route path="/payment-test" element={<PwaPaymentTestPage />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      <div style={{ paddingBottom: isMobile ? 80 : 20 }}>
+        <Routes>
+          <Route path="/" element={<PwaFeedPage />} />
+          <Route path="/markets" element={<PwaMarketsPage />} />
+          <Route path="/market/:id" element={<PwaMarketDetailPage />} />
+          <Route path="/payment-test" element={<PwaPaymentTestPage />} />
+          <Route path="/my-bets" element={
+            isAuthenticated ? <PwaMyBetsPage /> : <ProtectedRoute onLogin={() => setIsAuthenticated(true)}>{null}</ProtectedRoute>
+          } />
+          <Route path="/wallet" element={
+            isAuthenticated ? <PwaWalletPage /> : <ProtectedRoute onLogin={() => setIsAuthenticated(true)}>{null}</ProtectedRoute>
+          } />
+          <Route path="/results" element={
+            isAuthenticated ? <PwaResultsPage /> : <ProtectedRoute onLogin={() => setIsAuthenticated(true)}>{null}</ProtectedRoute>
+          } />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </div>
+
+      <PwaBottomNav />
+
     </div>
   );
 }

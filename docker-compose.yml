@@ -25,5 +25,16 @@ services:
     depends_on:
       - postgres
 
+  redis:
+    image: redis:7-alpine
+    container_name: tara_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - tara_redis_data:/data
+    command: redis-server --appendonly yes
+
 volumes:
   tara_postgres_data:
+  tara_redis_data:

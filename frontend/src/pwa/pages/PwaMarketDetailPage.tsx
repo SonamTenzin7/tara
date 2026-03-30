@@ -107,290 +107,256 @@ export function PwaMarketDetailPage() {
   })();
 
   return (
-    <div style={{ maxWidth: "680px", margin: "0 auto", padding: bp === "mobile" ? "16px 12px 80px" : "20px 16px" }}>
+    <div style={{ maxWidth: "800px", margin: "0 auto", padding: bp === "mobile" ? "16px 12px 100px" : "40px 20px", position: "relative" }}>
       <Link
         to="/"
         style={{
-          color: "#3b82f6",
+          color: "var(--text-subtle)",
           textDecoration: "none",
-          fontSize: "0.9rem",
+          fontSize: "0.85rem",
           display: "inline-flex",
           alignItems: "center",
-          gap: "4px",
-          marginBottom: "20px",
+          gap: "6px",
+          marginBottom: "24px",
+          fontWeight: 700,
+          transition: "color 0.2s",
         }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-main)")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-subtle)")}
       >
-        ← Back to Markets
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back to Feed
       </Link>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
-        <div>
-          <h1
-            style={{
-              fontSize: "1.2rem",
-              fontWeight: 700,
-              color: "#111827",
-              marginBottom: "8px",
-            }}
-          >
-            {market.title}
-          </h1>
-        </div>
-      </div>
-
-      {market.description && (
-        <p
-          style={{
-            color: "#9ca3af",
-            fontSize: "0.9rem",
-            lineHeight: 1.6,
-            marginTop: "12px",
-            marginBottom: "20px",
-          }}
-        >
-          {market.description}
-        </p>
-      )}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: bp === "mobile" ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(120px, 1fr))",
-          gap: "10px",
-          marginBottom: "24px",
-        }}
-      >
-        <div
-          style={{
-            background: "#ffffff",
-            border: "1px solid #e5e7eb",
-            borderRadius: "8px",
-            padding: "12px 16px",
-          }}
-        >
-          <div
-            style={{
-              color: "#9ca3af",
-              fontSize: "0.75rem",
-              marginBottom: "4px",
-            }}
-          >
-            STATUS
-          </div>
-          <div style={{ color: isOpen ? "#4CAF50" : isResolving ? "#f59e0b" : "#9ca3af", fontWeight: 700 }}>
-            {market.status.toUpperCase()}
-          </div>
-        </div>
-        <div
-          style={{
-            background: "#ffffff",
-            border: "1px solid #e5e7eb",
-            borderRadius: "8px",
-            padding: "12px 16px",
-          }}
-        >
-          <div
-            style={{
-              color: "#9ca3af",
-              fontSize: "0.75rem",
-              marginBottom: "4px",
-            }}
-          >
-            TOTAL POOL
-          </div>
-          <div style={{ color: "#111827", fontWeight: 700 }}>
-             {market.totalPool}
-          </div>
-        </div>
-        {market.closesAt && (
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1px solid #e5e7eb",
-              borderRadius: "8px",
-              padding: "12px 16px",
-            }}
-          >
-            <div
+      <div style={{ display: "flex", flexDirection: bp === "mobile" ? "column" : "row", gap: "32px", alignItems: "flex-start" }}>
+        {/* Left Column: Info */}
+        <div style={{ flex: 1.5, display: "flex", flexDirection: "column", gap: 24 }}>
+          <div>
+            <h1
               style={{
-                color: "#9ca3af",
-                fontSize: "0.75rem",
-                marginBottom: "4px",
+                fontSize: bp === "mobile" ? "1.5rem" : "2rem",
+                fontWeight: 900,
+                color: "var(--text-main)",
+                marginBottom: "12px",
+                lineHeight: 1.2,
+                fontFamily: "var(--font-display)",
+                letterSpacing: "-0.02em",
               }}
             >
-              CLOSES
-            </div>
-            <div style={{ color: "#111827", fontWeight: 700 }}>
-              {new Date(market.closesAt).toLocaleDateString()}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Crowd sentiment */}
-      <div style={{ marginBottom: "24px" }}>
-        <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#9ca3af", letterSpacing: "0.05em", marginBottom: "10px" }}>
-          CROWD SENTIMENT
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {market.outcomes.map((outcome) => {
-            const pct = totalBets > 0
-              ? (parseFloat(outcome.totalBetAmount) / totalBets) * 100
-              : 100 / market.outcomes.length;
-            return (
-              <div key={outcome.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "4px" }}>
-                  <span style={{ fontWeight: 600, color: "#111827" }}>{outcome.label}</span>
-                  <span style={{ color: "#9ca3af" }}>{pct.toFixed(0)}%</span>
-                </div>
-                <div style={{ background: "#f3f4f6", borderRadius: "4px", height: "6px", overflow: "hidden" }}>
-                  <div style={{ background: "#3b82f6", height: "100%", width: `${pct}%`, borderRadius: "4px", transition: "width 0.5s" }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {isOpen ? (
-        <PwaBetForm market={market} onBetPlaced={refreshMarket} />
-      ) : isResolving ? (
-        <div style={{ border: "1px solid #f59e0b", borderRadius: "12px", overflow: "hidden" }}>
-          {/* Header */}
-          <div style={{ background: "#fef3c7", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontWeight: 700, color: "#92400e", fontSize: "0.95rem" }}>Dispute Window Open</div>
-              <div style={{ fontSize: "0.8rem", color: "#b45309", marginTop: "2px" }}>{disputeTimeLeft}</div>
-            </div>
-            <div style={{ fontSize: "1.5rem" }}>⚖️</div>
-          </div>
-          {/* Proposed outcome */}
-          <div style={{ padding: "16px", background: "#fff" }}>
-            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#9ca3af", letterSpacing: "0.05em", marginBottom: "8px" }}>PROPOSED OUTCOME</div>
-            {proposedOutcome ? (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "8px 14px" }}>
-                <span style={{ color: "#16a34a", fontWeight: 700 }}>{proposedOutcome.label}</span>
-              </div>
-            ) : (
-              <div style={{ color: "#9ca3af", fontSize: "0.85rem" }}>Outcome pending</div>
-            )}
-            <div style={{ marginTop: "8px", fontSize: "0.8rem", color: "#6b7280" }}>
-              {disputes.length} dispute{disputes.length !== 1 ? "s" : ""} submitted
-            </div>
-          </div>
-          {/* Dispute form */}
-          <div style={{ padding: "16px", borderTop: "1px solid #f3f4f6", background: "#fafafa" }}>
-            {disputeSuccess ? (
-              <div style={{ textAlign: "center", padding: "12px", color: "#16a34a", fontWeight: 600, fontSize: "0.9rem" }}>
-                Dispute submitted. Your bond will be refunded after resolution.
-              </div>
-            ) : (
-              <>
-                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#374151", marginBottom: "10px" }}>
-                  Disagree with the proposed outcome?
-                </div>
-                <div style={{ marginBottom: "10px" }}>
-                  <label style={{ fontSize: "0.75rem", color: "#6b7280", display: "block", marginBottom: "4px" }}>Bond Amount (credits)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={bondAmount}
-                    onChange={(e) => setBondAmount(e.target.value)}
-                    style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: "8px", border: "1.5px solid #e5e7eb", fontSize: "0.9rem", outline: "none" }}
-                  />
-                </div>
-                <div style={{ marginBottom: "12px" }}>
-                  <label style={{ fontSize: "0.75rem", color: "#6b7280", display: "block", marginBottom: "4px" }}>Reason (optional)</label>
-                  <textarea
-                    value={disputeReason}
-                    onChange={(e) => setDisputeReason(e.target.value)}
-                    rows={2}
-                    placeholder="Why do you think this outcome is wrong?"
-                    style={{ width: "100%", boxSizing: "border-box", padding: "8px 12px", borderRadius: "8px", border: "1.5px solid #e5e7eb", fontSize: "0.85rem", outline: "none", resize: "none", fontFamily: "inherit" }}
-                  />
-                </div>
-                {disputeError && <div style={{ color: "#dc2626", fontSize: "0.8rem", marginBottom: "8px" }}>{disputeError}</div>}
-                <button
-                  onClick={handleSubmitDispute}
-                  disabled={disputeSubmitting}
-                  style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "none", background: disputeSubmitting ? "#d1d5db" : "#f59e0b", color: "#fff", fontWeight: 700, fontSize: "0.9rem", cursor: disputeSubmitting ? "not-allowed" : "pointer" }}
-                >
-                  {disputeSubmitting ? "Submitting…" : "Submit Dispute"}
-                </button>
-                <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: "8px", textAlign: "center" }}>
-                  Bond is always refunded after admin makes the final call.
-                </div>
-              </>
+              {market.title}
+            </h1>
+            {market.description && (
+              <p
+                style={{
+                  color: "var(--text-muted)",
+                  fontSize: "1rem",
+                  lineHeight: 1.6,
+                  fontWeight: 500,
+                }}
+              >
+                {market.description}
+              </p>
             )}
           </div>
-        </div>
-      ) : market.status === "upcoming" ? (
-        <div
-          style={{
-            background: "linear-gradient(135deg, #eff6ff, #ffffff)",
-            border: "1px solid #3b82f644",
-            borderRadius: "16px",
-            padding: "32px 20px",
-            textAlign: "center",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-          }}
-        >
-          <div style={{ fontSize: "2.5rem", marginBottom: "16px" }}>🕒</div>
-          <div style={{ fontWeight: 700, color: "#111827", fontSize: "1.1rem", marginBottom: "8px" }}>
-            Market Starts Soon
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "12px",
+            }}
+          >
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-md)", padding: "16px", boxShadow: "var(--shadow-sm)" }}>
+              <div style={{ color: "var(--text-subtle)", fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px", letterSpacing: "0.05em" }}>Status</div>
+              <div style={{ color: isOpen ? "#22c55e" : isResolving ? "#f59e0b" : "var(--text-muted)", fontWeight: 800, fontSize: "0.9rem" }}>
+                {market.status.toUpperCase()}
+              </div>
+            </div>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-md)", padding: "16px", boxShadow: "var(--shadow-sm)" }}>
+              <div style={{ color: "var(--text-subtle)", fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px", letterSpacing: "0.05em" }}>Total Pool</div>
+              <div style={{ color: "var(--text-main)", fontWeight: 800, fontSize: "0.9rem" }}>Nu {Number(market.totalPool).toLocaleString()}</div>
+            </div>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-md)", padding: "16px", boxShadow: "var(--shadow-sm)" }}>
+              <div style={{ color: "var(--text-subtle)", fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase", marginBottom: "4px", letterSpacing: "0.05em" }}>Ends</div>
+              <div style={{ color: "var(--text-main)", fontWeight: 800, fontSize: "0.9rem" }}>
+                {market.closesAt ? new Date(market.closesAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "N/A"}
+              </div>
+            </div>
           </div>
-          <div style={{ color: "#9ca3af", fontSize: "0.9rem", maxWidth: "300px", margin: "0 auto" }}>
-            This market opens for betting on{" "}
-            <strong style={{ color: "#3b82f6" }}>
-              {new Date(market.opensAt!).toLocaleString(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
+
+          {/* Crowd sentiment */}
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "24px", boxShadow: "var(--shadow-premium)" }}>
+            <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "20px" }}>
+              CROWD SENTIMENT
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {market.outcomes.map((outcome, idx) => {
+                const pct = totalBets > 0
+                  ? (parseFloat(outcome.totalBetAmount) / totalBets) * 100
+                  : 100 / market.outcomes.length;
+                const colors = ["#22c55e", "#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6"];
+                const color = colors[idx % colors.length];
+                
+                return (
+                  <div key={outcome.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem", marginBottom: "8px" }}>
+                      <span style={{ fontWeight: 700, color: "var(--text-main)" }}>{outcome.label}</span>
+                      <span style={{ fontWeight: 800, color: color }}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <div style={{ background: "#f1f5f9", borderRadius: "10px", height: "8px", overflow: "hidden" }}>
+                      <div style={{ 
+                        background: color, 
+                        height: "100%", 
+                        width: `${pct}%`, 
+                        borderRadius: "10px", 
+                        transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)",
+                        boxShadow: `0 0 10px ${color}40`,
+                      }} />
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-subtle)", marginTop: "4px", fontWeight: 600 }}>
+                      Nu {Number(outcome.totalBetAmount).toLocaleString()} placed
+                    </div>
+                  </div>
+                );
               })}
-            </strong>
+            </div>
           </div>
         </div>
-      ) : (
-        <div
-          style={{
-            background: "#f3f4f6",
-            border: "1px solid #e5e7eb",
-            borderRadius: "12px",
-            padding: "24px",
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontWeight: 700, color: "#9ca3af", marginBottom: "8px" }}>
-            Betting is closed
-          </div>
-          <div style={{ color: "#9ca3af", fontSize: "0.85rem" }}>
-            This market has closed and is no longer accepting new bets.
-          </div>
-        </div>
-      )}
 
-      {/* Keep the Telegram option but as a secondary choice */}
-      <div style={{ marginTop: "32px", textAlign: "center", borderTop: "1px solid #e5e7eb", paddingTop: "24px" }}>
-        <div style={{ color: "#9ca3af", fontSize: "0.85rem", marginBottom: "12px" }}>
-          Other ways to bet:
+        {/* Right Column: Interaction */}
+        <div style={{ flex: 1, position: bp === "mobile" ? "static" : "sticky", top: "100px", width: "100%" }}>
+          {isOpen ? (
+            <div style={{ background: "var(--bg-card)", border: "1.5px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "24px", boxShadow: "var(--shadow-premium)", backdropFilter: "var(--glass-blur)" }}>
+              <PwaBetForm market={market} onBetPlaced={refreshMarket} />
+            </div>
+          ) : isResolving ? (
+            <div style={{ background: "#fff9eb", border: "1.5px solid #fcd34d", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-premium)" }}>
+              {/* Header */}
+              <div style={{ background: "#fef3c7", padding: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 900, color: "#92400e", fontSize: "1rem", letterSpacing: "0.02em" }}>DISPUTE WINDOW</div>
+                  <div style={{ fontSize: "0.8rem", color: "#b45309", marginTop: "2px", fontWeight: 700 }}>{disputeTimeLeft}</div>
+                </div>
+                <div style={{ fontSize: "2rem" }}>⚖️</div>
+              </div>
+              
+              <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: 20 }}>
+                {proposedOutcome && (
+                  <div>
+                    <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "#b45309", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "8px" }}>PROPOSED OUTCOME</div>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#fff", border: "1px solid #fde68a", borderRadius: "10px", padding: "12px 16px", width: "100%", boxSizing: "border-box" }}>
+                      <span style={{ color: "#b45309", fontWeight: 800, fontSize: "1.1rem" }}>{proposedOutcome.label}</span>
+                      <span style={{ background: "#f59e0b", color: "#fff", fontSize: "0.65rem", fontWeight: 900, padding: "2px 8px", borderRadius: "4px", marginLeft: "auto" }}>ADMIN</span>
+                    </div>
+                  </div>
+                )}
+
+                {disputeSuccess ? (
+                  <div style={{ textAlign: "center", padding: "20px", background: "#ecfdf5", borderRadius: "12px", border: "1.5px solid #6ee7b7", color: "#065f46" }}>
+                    <div style={{ fontSize: "1.5rem", marginBottom: "8px" }}>✅</div>
+                    <div style={{ fontWeight: 800 }}>Dispute Submitted</div>
+                    <div style={{ fontSize: "0.85rem", marginTop: "4px" }}>Admin will review the evidence and make a final call.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div>
+                      <label style={{ fontSize: "0.75rem", color: "#92400e", fontWeight: 700, display: "block", marginBottom: "8px" }}>BOND AMOUNT (Nu)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={bondAmount}
+                        onChange={(e) => setBondAmount(e.target.value)}
+                        style={{ width: "100%", boxSizing: "border-box", padding: "14px", borderRadius: "12px", border: "1.5px solid #fde68a", fontSize: "1rem", fontWeight: 700, outline: "none" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "0.75rem", color: "#92400e", fontWeight: 700, display: "block", marginBottom: "8px" }}>REASON FOR DISPUTE</label>
+                      <textarea
+                        value={disputeReason}
+                        onChange={(e) => setDisputeReason(e.target.value)}
+                        rows={3}
+                        placeholder="Provide details or links to evidence..."
+                        style={{ width: "100%", boxSizing: "border-box", padding: "14px", borderRadius: "12px", border: "1.5px solid #fde68a", fontSize: "0.9rem", outline: "none", resize: "none", fontFamily: "var(--font-primary)" }}
+                      />
+                    </div>
+                    {disputeError && <div style={{ color: "#dc2626", fontSize: "0.85rem", fontWeight: 600 }}>{disputeError}</div>}
+                    <button
+                      onClick={handleSubmitDispute}
+                      disabled={disputeSubmitting}
+                      style={{ 
+                        width: "100%", 
+                        padding: "16px", 
+                        borderRadius: "12px", 
+                        border: "none", 
+                        background: disputeSubmitting ? "#d1d5db" : "#f59e0b", 
+                        color: "#fff", 
+                        fontWeight: 900, 
+                        fontSize: "1rem", 
+                        cursor: disputeSubmitting ? "not-allowed" : "pointer",
+                        boxShadow: "0 4px 12px rgba(245,158,11,0.3)",
+                        transition: "transform 0.2s",
+                      }}
+                      onMouseEnter={(e) => !disputeSubmitting && (e.currentTarget.style.transform = "scale(1.02)")}
+                      onMouseLeave={(e) => !disputeSubmitting && (e.currentTarget.style.transform = "scale(1)")}
+                    >
+                      {disputeSubmitting ? "PROCESSING..." : "SUBMIT DISPUTE"}
+                    </button>
+                    <div style={{ fontSize: "0.7rem", color: "#b45309", textAlign: "center", fontWeight: 600 }}>
+                      * Bonds are fully refunded after resolution.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : market.status === "upcoming" ? (
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1.5px solid var(--glass-border)",
+                borderRadius: "var(--radius-lg)",
+                padding: "40px 24px",
+                textAlign: "center",
+                boxShadow: "var(--shadow-premium)",
+                backdropFilter: "var(--glass-blur)",
+              }}
+            >
+              <div style={{ fontSize: "3rem", marginBottom: "20px" }}>🚀</div>
+              <div style={{ fontWeight: 900, color: "var(--text-main)", fontSize: "1.3rem", marginBottom: "12px", fontFamily: "var(--font-display)" }}>
+                Opening Soon
+              </div>
+              <div style={{ color: "var(--text-muted)", fontSize: "1rem", lineHeight: 1.5 }}>
+                Bets will be accepted starting<br />
+                <strong style={{ color: "#3b82f6", fontSize: "1.1rem" }}>
+                  {new Date(market.opensAt!).toLocaleTimeString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </strong>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1.5px solid var(--glass-border)",
+                borderRadius: "var(--radius-lg)",
+                padding: "40px 24px",
+                textAlign: "center",
+                boxShadow: "var(--shadow-premium)",
+              }}
+            >
+               <div style={{ fontSize: "3rem", marginBottom: "20px" }}>🔒</div>
+              <div style={{ fontWeight: 900, color: "var(--text-muted)", fontSize: "1.2rem", marginBottom: "8px" }}>
+                Betting Closed
+              </div>
+              <p style={{ color: "var(--text-subtle)", fontSize: "0.9rem" }}>
+                This market is currently being resolved or has finished.
+              </p>
+            </div>
+          )}
         </div>
-        <a
-          href={`https://t.me/Tara_parimutuel_bot/app?startapp=market_${market.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            color: "#3b82f6",
-            textDecoration: "none",
-            fontSize: "0.9rem",
-            fontWeight: 600
-          }}
-        >
-           Open in Telegram Mini App
-        </a>
       </div>
     </div>
   );

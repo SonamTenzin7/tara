@@ -1,12 +1,10 @@
 import { FC, useState, useEffect } from "react";
 import { Spinner } from "@telegram-apps/telegram-ui";
 import { Page } from "@/tma/components/Page";
-import { getMarkets, getDisputes, submitDispute, placeBet, loginWithDKBank, type Market, type Dispute } from "@/api/client";
-import { initiateDKBankPayment, checkDKBankPaymentStatus } from "@/api/dkbank";
+import { getMarkets, placeBet, type Market } from "@/api/client";
 import { useAuth } from "@/tma/hooks/useAuth";
 import { TmaPaymentModal } from "@/tma/components/TmaPaymentModal";
 import type { PaymentResponse } from "@/types/payment";
-import { PoolDetails } from "@/components/PoolDetails";
 
 function outcomeColor(rank: number, total: number): string {
   if (rank === 0) return "#22c55e";
@@ -31,219 +29,16 @@ function useCountdown(targetAt: string | null): string {
   return label;
 }
 
-// ── Dispute Panel ───────────────────────────────────────────────────────────
-
-type DisputeStep = "form" | "processing" | "success" | "failed";
-type DisputeMethod = "dkbank" | "ton";
-
-function DisputePanel({ market }: { market: Market }) {
-  const [disputes, setDisputes] = useState<Dispute[]>([]);
-  const [method, setMethod] = useState<DisputeMethod>("dkbank");
-  const [cid, setCid] = useState("");
-  const [bondAmount, setBondAmount] = useState("50");
-  const [reason, setReason] = useState("");
-  const [step, setStep] = useState<DisputeStep>("form");
-  const [statusMsg, setStatusMsg] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const deadline = useCountdown(market.disputeDeadlineAt ?? null);
-
-  useEffect(() => {
-    getDisputes(market.id).then(setDisputes).catch(() => {});
-  }, [market.id]);
-
-  const proposedOutcome = market.outcomes.find((o) => o.id === market.proposedOutcomeId);
-  const amt = Number(bondAmount);
-  const canSubmit = method === "dkbank" && cid.length === 11 && amt >= 1 && step === "form";
-
-  const pollStatus = async (paymentId: string, amount: number) => {
-    const max = 24;
-    let attempts = 0;
-    const poll = async () => {
-      try {
-        const s = await checkDKBankPaymentStatus(paymentId);
-        if (s.status === "success") {
-          await submitDispute(market.id, { paymentId, reason: reason.trim() || undefined });
-          setDisputes((prev) => [...prev, { id: Date.now().toString(), bondAmount: String(amount), reason: reason.trim() || null, bondRefunded: false, createdAt: new Date().toISOString(), userId: "", marketId: market.id }]);
-          setStep("success");
-        } else if (s.status === "failed") {
-          setError(s.failureReason || "Payment failed");
-          setStep("failed");
-        } else if (attempts < max) {
-          attempts++;
-          setStatusMsg(`Waiting for DK Bank confirmation… (${attempts})`);
-          setTimeout(poll, 10_000);
-        } else {
-          setError("Payment verification timeout. Please try again.");
-          setStep("failed");
-        }
-      } catch {
-        if (attempts < max) { attempts++; setTimeout(poll, 10_000); }
-        else { setError("Unable to verify payment"); setStep("failed"); }
-      }
-    };
-    poll();
-  };
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-    setStep("processing");
-    setStatusMsg("Verifying CID with DK Bank…");
-    setError(null);
-    try {
-      await loginWithDKBank(cid);
-      setStatusMsg("Initiating bond payment…");
-      const payment = await initiateDKBankPayment({
-        amount: amt,
-        customerPhone: cid,
-        description: `Dispute bond: ${market.title}`,
-      });
-      if (payment.status === "success") {
-        await submitDispute(market.id, { paymentId: payment.paymentId, reason: reason.trim() || undefined });
-        setDisputes((prev) => [...prev, { id: Date.now().toString(), bondAmount: String(amt), reason: reason.trim() || null, bondRefunded: false, createdAt: new Date().toISOString(), userId: "", marketId: market.id }]);
-        setStep("success");
-      } else {
-        setStatusMsg("OTP sent to your DK Bank phone. Waiting for confirmation…");
-        pollStatus(payment.paymentId, amt);
-      }
-    } catch (e: any) {
-      setError(e.message ?? "Payment failed");
-      setStep("failed");
-    }
-  };
-
-  return (
-    <div style={{
-      background: "#fffbeb", border: "1.5px solid #f59e0b",
-      borderRadius: 10, padding: "10px 12px",
-      display: "flex", flexDirection: "column", gap: 8,
-    }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: "#b45309", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          ⚖️ Dispute Window
-        </div>
-        <div style={{ fontSize: 10, color: "#92400e" }}>{deadline}</div>
-      </div>
-
-      {/* Proposed outcome */}
-      {proposedOutcome && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
-          <span style={{ color: "#6b7280" }}>Proposed:</span>
-          <span style={{ fontWeight: 700, color: "#111827" }}>{proposedOutcome.label}</span>
-          <span style={{ background: "#f59e0b", color: "#fff", fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4 }}>Admin</span>
-        </div>
-      )}
-
-      {disputes.length > 0 && (
-        <div style={{ fontSize: 10, color: "#92400e" }}>
-          {disputes.length} dispute{disputes.length !== 1 ? "s" : ""} submitted
-        </div>
-      )}
-
-      {step === "success" ? (
-        <div style={{ fontSize: 12, color: "#059669", fontWeight: 600, textAlign: "center", padding: "4px 0" }}>
-          Dispute recorded. Your bond payment was verified via DK Bank OTP and will be refunded after admin resolution.
-        </div>
-      ) : step === "failed" ? (
-        <>
-          <div style={{ fontSize: 11, color: "#ef4444" }}>{error}</div>
-          <button onClick={() => { setStep("form"); setError(null); }} style={{ padding: "6px 0", borderRadius: 7, background: "#f59e0b", border: "none", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-            Try Again
-          </button>
-        </>
-      ) : step === "processing" ? (
-        <div style={{ fontSize: 11, color: "#92400e", textAlign: "center", padding: "4px 0" }}>
-          {statusMsg}<br />
-          <span style={{ fontSize: 9, opacity: 0.8 }}>Confirm the OTP sent to your registered DK Bank number</span>
-        </div>
-      ) : (
-        <>
-          {/* Payment method selector */}
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              onClick={() => setMethod("dkbank")}
-              style={{
-                flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: method === "dkbank" ? "#f59e0b" : "#fff",
-                color: method === "dkbank" ? "#fff" : "#92400e",
-                border: `1.5px solid ${method === "dkbank" ? "#f59e0b" : "#fcd34d"}`,
-              }}
-            >
-              DK Bank
-            </button>
-            <button
-              disabled
-              style={{
-                flex: 1, padding: "5px 0", borderRadius: 7, fontSize: 11, fontWeight: 700,
-                background: "#f9fafb", color: "#9ca3af", border: "1.5px solid #e5e7eb", cursor: "not-allowed",
-              }}
-            >
-              TON · Soon
-            </button>
-          </div>
-
-          {method === "dkbank" && (
-            <>
-              <input
-                type="number"
-                min={1}
-                value={bondAmount}
-                onChange={(e) => setBondAmount(e.target.value)}
-                placeholder="Bond amount (Nu)"
-                style={{ padding: "6px 8px", borderRadius: 7, border: "1px solid #fcd34d", background: "#fff", fontSize: 12, color: "#111827", outline: "none", width: "100%", boxSizing: "border-box" }}
-              />
-              <input
-                type="text"
-                inputMode="numeric"
-                value={cid}
-                onChange={(e) => setCid(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                placeholder="Your 11-digit CID"
-                style={{ padding: "6px 8px", borderRadius: 7, border: `1px solid ${cid.length > 0 && cid.length !== 11 ? "#fca5a5" : "#fcd34d"}`, background: "#fff", fontSize: 12, color: "#111827", outline: "none", width: "100%", boxSizing: "border-box" }}
-              />
-              <div style={{ fontSize: 9, color: "#92400e" }}>
-                An OTP will be sent to the phone registered with your CID to verify payment
-              </div>
-              <input
-                type="text"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Reason (optional)"
-                style={{ padding: "6px 8px", borderRadius: 7, border: "1px solid #fcd34d", background: "#fff", fontSize: 12, color: "#111827", outline: "none", width: "100%", boxSizing: "border-box" }}
-              />
-              {error && <div style={{ fontSize: 10, color: "#ef4444" }}>{error}</div>}
-              <button
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                style={{
-                  padding: "8px 0", borderRadius: 8,
-                  background: canSubmit ? "#f59e0b" : "#e5e7eb",
-                  border: "none", color: canSubmit ? "#fff" : "#9ca3af",
-                  fontSize: 12, fontWeight: 700, cursor: canSubmit ? "pointer" : "not-allowed",
-                }}
-              >
-                {cid.length !== 11 ? "Enter 11-digit CID" : `Pay Nu ${amt} via DK Bank`}
-              </button>
-              <div style={{ fontSize: 9, color: "#92400e", textAlign: "center" }}>
-                Bond is fully refunded after admin resolution
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 // ── Market Card ───────────────────────────────────────────────────────────────
 
-function MarketCard({ market, onBet, lastUpdated }: {
+function MarketCard({ market, onBet }: {
   market: Market;
   onBet: (outcomeId: string) => void;
-  lastUpdated?: Date | null;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const isUpcoming = market.status === "upcoming";
   const isResolving = market.status === "resolving";
-  const countdown = useCountdown(market.closesAt);
+  const countdown = useCountdown(isUpcoming ? market.opensAt ?? null : market.closesAt);
   const totalPool = Number(market.totalPool);
 
   const sentiment = (() => {
@@ -258,133 +53,85 @@ function MarketCard({ market, onBet, lastUpdated }: {
     });
   })();
 
-  const isBinary = sentiment.length <= 2;
+  const displayOutcomes = showAll ? sentiment : sentiment.slice(0, 2);
 
   return (
     <div style={{
-      background: "#ffffff",
-      border: isResolving ? "1.5px solid #f59e0b" : "1px solid #e5e7eb",
-      borderRadius: 14,
-      padding: "14px",
-      marginBottom: 10,
-      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+      background: "var(--bg-card)",
+      border: "1px solid var(--glass-border)",
+      borderRadius: "var(--radius-lg)",
+      padding: "16px",
+      marginBottom: 12,
       display: "flex",
       flexDirection: "column",
-      gap: 10,
+      gap: 12,
       position: "relative",
+      boxShadow: "var(--shadow-sm)",
     }}>
-      {isResolving && (
-        <div style={{
-          position: "absolute", top: 0, right: 0,
-          background: "linear-gradient(90deg, #f59e0b, #d97706)",
-          color: "#fff", padding: "2px 8px", fontSize: "0.55rem", fontWeight: 800,
-          borderBottomLeftRadius: 8, textTransform: "uppercase", letterSpacing: "0.05em",
-        }}>Resolving</div>
-      )}
-
-      {/* Title */}
-      <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.4, color: "#111827" }}>
+      <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.4, color: "var(--text-main)", fontFamily: "var(--font-display)", paddingRight: (isUpcoming || isResolving) ? 40 : 0 }}>
         {market.title}
       </div>
 
-      {/* Outcomes / Dispute panel */}
-      {isResolving ? (
-        <DisputePanel market={market} />
-      ) : isBinary ? (
-        <>
-          {/* Probability display */}
-          <div style={{ display: "flex", gap: 8 }}>
-            {sentiment.map((s) => (
-              <div key={s.id} style={{ flex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 18, fontWeight: 900, color: s.color }}>{s.pct.toFixed(0)}%</div>
-                <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
-              </div>
-            ))}
+      {(isUpcoming || isResolving) && (
+        <div style={{
+          position: "absolute", top: 12, right: 12,
+          background: isUpcoming ? "#3b82f6" : "#f59e0b",
+          color: "#fff", padding: "2px 8px", fontSize: "0.6rem", fontWeight: 800, borderRadius: 4,
+        }}>
+          {isUpcoming ? "SOON" : "WAIT"}
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+        {isResolving ? (
+          <div style={{ flex: 1, padding: "10px", borderRadius: 12, background: "#fffbeb", border: "1px dashed #f59e0b", fontSize: "0.75rem", color: "#b45309", fontWeight: 700, textAlign: "center" }}>
+            Resolving
           </div>
-          {/* Probability bar */}
-          <div style={{ display: "flex", height: 3, borderRadius: 2, overflow: "hidden", gap: 1 }}>
-            {sentiment.map((s) => (
-              <div key={s.id} style={{ width: `${s.pct}%`, background: s.color, minWidth: s.pct > 0 ? 2 : 0 }} />
-            ))}
+        ) : isUpcoming ? (
+          <div style={{ flex: 1, padding: "10px", borderRadius: 12, background: "#f1f5f9", fontSize: "0.75rem", color: "#64748b", fontWeight: 700, textAlign: "center" }}>
+            Opens {countdown}
           </div>
-          {/* Bet buttons */}
-          <div style={{ display: "flex", gap: 6 }}>
-            {sentiment.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => onBet(s.id)}
-                style={{
-                  flex: 1, padding: "9px 0", borderRadius: 9,
-                  border: `1.5px solid ${s.color}`,
-                  background: s.color, color: "#ffffff",
-                  fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  transition: "opacity 0.12s",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
-                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-              >
-                Bet {s.label}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        /* Multi-outcome: collapsible rows */
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          {(showAll ? sentiment : sentiment.slice(0, 2)).map((s) => (
+        ) : (
+          displayOutcomes.map((s) => (
             <button
               key={s.id}
               onClick={() => onBet(s.id)}
               style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "8px 10px", borderRadius: 9,
-                border: "1.5px solid #e5e7eb",
-                background: "#f9fafb", cursor: "pointer",
-                transition: "all 0.12s", textAlign: "left",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = s.color;
-                e.currentTarget.style.background = `${s.color}0f`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#e5e7eb";
-                e.currentTarget.style.background = "#f9fafb";
+                flex: showAll ? "1 0 45%" : 1, padding: "10px 4px", borderRadius: 12,
+                background: `${s.color}15`, 
+                border: `1px solid ${s.color}25`,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
               }}
             >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#111827", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</span>
-              <div style={{ width: 48, height: 3, borderRadius: 2, background: "#e5e7eb", overflow: "hidden", flexShrink: 0 }}>
-                <div style={{ width: `${s.pct}%`, height: "100%", background: s.color }} />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 800, color: s.color, minWidth: 28, textAlign: "right", flexShrink: 0 }}>{s.pct.toFixed(0)}%</span>
-              <span style={{
-                fontSize: 10, fontWeight: 700, color: "#ffffff",
-                background: s.color, borderRadius: 6, padding: "2px 7px", flexShrink: 0,
-              }}>Bet</span>
+              <div style={{ fontSize: "0.6rem", fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase" }}>{s.label}</div>
+              <div style={{ fontSize: "1rem", fontWeight: 900, color: s.color }}>{s.pct.toFixed(0)}%</div>
             </button>
-          ))}
-          {sentiment.length > 2 && (
-            <button
-              onClick={() => setShowAll((v) => !v)}
-              style={{
-                padding: "6px 10px", borderRadius: 9,
-                border: "1.5px solid #e5e7eb",
-                background: "transparent", cursor: "pointer",
-                fontSize: 11, fontWeight: 700, color: "#6b7280",
-                textAlign: "center", transition: "all 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#9ca3af"; e.currentTarget.style.color = "#374151"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.color = "#6b7280"; }}
-            >
-              {showAll ? "Show less" : `+${sentiment.length - 2} more`}
-            </button>
-          )}
-        </div>
+          ))
+        )}
+      </div>
+
+      {market.outcomes.length > 2 && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowAll(!showAll); }}
+          style={{
+            background: "rgba(255, 255, 255, 0.2)", border: "1px solid var(--glass-border)", 
+            padding: "8px 12px", borderRadius: 12, fontSize: "0.75rem",
+            color: "var(--text-main)", fontWeight: 800, cursor: "pointer",
+            textAlign: "center", width: "100%", marginTop: 8,
+            backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)"
+          }}
+        >
+          {showAll ? "Show Less" : `View ${market.outcomes.length - 2} more...`}
+        </button>
       )}
 
-      {/* Footer */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#9ca3af" }}>
-        <PoolDetails market={market} lastUpdated={lastUpdated} />
-        <span>{isResolving ? "Dispute window" : countdown}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, color: "var(--text-subtle)", fontWeight: 700, paddingTop: 8, borderTop: "1px solid var(--glass-border)" }}>
+        <div style={{ color: "#22c55e" }}>Nu {totalPool.toLocaleString()} Pool</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          {(!isUpcoming && !isResolving) ? countdown : "Closed"}
+        </div>
       </div>
     </div>
   );
@@ -399,13 +146,11 @@ export const TmaFeedPage: FC = () => {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeBet, setActiveBet] = useState<ActiveBet | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     getMarkets()
       .then((d) => {
-        setMarkets(d.filter((m) => m.status === "open" || m.status === "resolving"));
-        setLastUpdated(new Date());
+        setMarkets(d.filter((m) => m.status === "open" || m.status === "resolving" || m.status === "upcoming"));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -439,8 +184,7 @@ export const TmaFeedPage: FC = () => {
 
     getMarkets()
       .then((d) => {
-        setMarkets(d.filter((m) => m.status === "open" || m.status === "resolving"));
-        setLastUpdated(new Date());
+        setMarkets(d.filter((m) => m.status === "open" || m.status === "resolving" || m.status === "upcoming"));
       })
       .catch(console.error);
   };
@@ -455,52 +199,73 @@ export const TmaFeedPage: FC = () => {
 
   if (!markets.length) return (
     <Page>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 12, textAlign: "center", padding: "0 32px" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, textAlign: "center", padding: "0 32px" }}>
         <div style={{ fontSize: 48 }}>🔮</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>No open predictions</div>
-        <div style={{ fontSize: 13, color: "#9ca3af" }}>Check back soon.</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-main)", fontFamily: "var(--font-display)" }}>No open predictions</div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Check back later for new markets.</div>
       </div>
     </Page>
   );
 
   const openMarkets = markets.filter((m) => m.status === "open");
   const resolvingMarkets = markets.filter((m) => m.status === "resolving");
+  const upcomingMarkets = markets.filter((m) => m.status === "upcoming");
   const activeMarket = activeBet ? markets.find((m) => m.id === activeBet.marketId) : null;
 
   return (
     <Page>
-      <div style={{ padding: "10px 10px 80px", background: "#f5f5f7", minHeight: "100vh" }}>
+      <div style={{ padding: "20px 14px 100px", background: "transparent", minHeight: "100vh", position: "relative" }}>
+        <div className="mesh-bg" />
+        
         {resolvingMarkets.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#f59e0b", marginBottom: 8, paddingLeft: 2 }}>
-               Dispute Window — {resolvingMarkets.length} pending
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, paddingLeft: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />
+              <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>WAITING</div>
             </div>
             {resolvingMarkets.map((market) => (
               <MarketCard
                 key={market.id}
                 market={market}
                 onBet={(outcomeId) => setActiveBet({ marketId: market.id, outcomeId })}
-                lastUpdated={lastUpdated}
               />
             ))}
-          </>
+          </div>
         )}
+
         {openMarkets.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#9ca3af", marginBottom: 10, paddingLeft: 2 }}>
-              {openMarkets.length} open prediction{openMarkets.length !== 1 ? "s" : ""}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, paddingLeft: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
+              <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>LIVE</div>
             </div>
             {openMarkets.map((market) => (
               <MarketCard
                 key={market.id}
                 market={market}
                 onBet={(outcomeId) => setActiveBet({ marketId: market.id, outcomeId })}
-                lastUpdated={lastUpdated}
               />
             ))}
-          </>
+          </div>
+        )}
+
+        {upcomingMarkets.length > 0 && (
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, paddingLeft: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#94a3b8" }} />
+              <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em" }}>SOON</div>
+            </div>
+            {upcomingMarkets.map((market) => (
+              <MarketCard
+                key={market.id}
+                market={market}
+                onBet={(outcomeId) => setActiveBet({ marketId: market.id, outcomeId })}
+              />
+            ))}
+          </div>
         )}
       </div>
+
       {activeMarket && activeBet && (
         <TmaPaymentModal
           isOpen={true}

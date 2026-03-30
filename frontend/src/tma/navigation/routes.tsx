@@ -10,6 +10,10 @@ import { InitDataPage } from "@/tma/pages/InitDataPage.tsx";
 import { LaunchParamsPage } from "@/tma/pages/LaunchParamsPage.tsx";
 import { ThemeParamsPage } from "@/tma/pages/ThemeParamsPage.tsx";
 import { TONConnectPage } from "@/tma/pages/TONConnectPage/TONConnectPage";
+import { PwaMyBetsPage } from "@/pwa/pages/PwaMyBetsPage";
+import { PwaWalletPage } from "@/pwa/pages/PwaWalletPage";
+import { PwaResultsPage } from "@/pwa/pages/PwaResultsPage";
+import { TmaPageWrapper } from "@/tma/components/TmaPageWrapper";
 
 interface Route {
   path: string;
@@ -59,4 +63,7 @@ export const routes: Route[] = [
       </svg>
     ),
   },
+  { path: "/my-bets", Component: () => <TmaPageWrapper><PwaMyBetsPage /></TmaPageWrapper>, title: "My Bets" },
+  { path: "/wallet", Component: () => <TmaPageWrapper><PwaWalletPage /></TmaPageWrapper>, title: "Wallet" },
+  { path: "/results", Component: () => <TmaPageWrapper><PwaResultsPage /></TmaPageWrapper>, title: "Results" },
 ];

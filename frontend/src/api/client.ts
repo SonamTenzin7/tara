@@ -21,6 +21,26 @@ export function clearToken() {
   localStorage.removeItem("tara_token");
 }
 
+// Decode a JWT payload without a library — returns null if malformed
+export function decodeTokenPayload(token: string): Record<string, any> | null {
+  try {
+    const payload = token.split(".")[1];
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+  } catch {
+    return null;
+  }
+}
+
+// Returns true if the stored token exists and has not expired
+export function isTokenValid(): boolean {
+  const token = getToken();
+  if (!token) return false;
+  const payload = decodeTokenPayload(token);
+  if (!payload?.exp) return false;
+  // exp is in seconds; give a 30-second buffer
+  return payload.exp * 1000 > Date.now() + 30_000;
+}
+
 // Base fetch wrapper — automatically attaches Bearer token
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
@@ -33,6 +53,14 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   }
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    // Token rejected by server — clear it and notify the app
+    clearToken();
+    window.dispatchEvent(new Event("tara:unauthorized"));
+    const err = await res.json().catch(() => ({ message: "Unauthorized" }));
+    throw new Error(err.message || "Unauthorized");
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
@@ -53,6 +81,8 @@ export interface AuthUser {
   photoUrl: string | null;
   isAdmin: boolean;
   balance: string;
+  creditsBalance?: number;
+  createdAt?: string;
 }
 
 export interface AuthResponse {
@@ -162,8 +192,38 @@ export function placeBet(marketId: string, payload: PlaceBetPayload) {
   });
 }
 
-export function getMyBets() {
-  return request("/bets/my");
+export interface Bet {
+  id: string;
+  amount: number;
+  status: "pending" | "won" | "lost" | "refunded";
+  oddsAtPlacement: number | null;
+  payout: number | null;
+  placedAt: string;
+  marketId: string;
+  outcomeId: string;
+  market?: Market;
+  outcome?: Outcome;
+}
+
+export interface Transaction {
+  id: string;
+  type: "deposit" | "withdrawal" | "bet_placed" | "bet_payout" | "refund" | "dispute_bond" | "dispute_refund";
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  note: string | null;
+  betId: string | null;
+  paymentId: string | null;
+  createdAt: string;
+}
+
+export function getMyBets(status?: Bet["status"]): Promise<Bet[]> {
+  const qs = status ? `?status=${status}` : "";
+  return request<Bet[]>(`/users/me/bets${qs}`);
+}
+
+export function getMyResults(): Promise<Bet[]> {
+  return request<Bet[]>("/users/me/results");
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -172,8 +232,9 @@ export function getMe(): Promise<AuthUser> {
   return request<AuthUser>("/users/me");
 }
 
-export function getMyTransactions() {
-  return request("/users/me/transactions");
+export function getMyTransactions(type?: Transaction["type"]): Promise<Transaction[]> {
+  const qs = type ? `?type=${type}` : "";
+  return request<Transaction[]>(`/users/me/transactions${qs}`);
 }
 
 // ─── TON Wallet Betting ──────────────────────────────────────────────────────
