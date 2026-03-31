@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { initiateDKBankPayment, confirmDKBankPayment, checkDKBankPaymentStatus, formatBTN } from '@/api/dkbank';
-import { loginWithDKBank } from '@/api/client';
 import type { Market } from '@/api/client';
 import type { DKBankPaymentRequest, PaymentResponse } from '@/types/payment';
 import { PayoutBreakdown } from '@/components/PayoutBreakdown';
@@ -35,7 +34,16 @@ export function TmaPaymentModal({
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [pendingPaymentId, setPendingPaymentId] = useState('');
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handleResize = () => setViewportHeight(vv.height);
+    vv.addEventListener('resize', handleResize);
+    return () => vv.removeEventListener('resize', handleResize);
+  }, []);
 
   const outcome = market.outcomes.find((o) => o.id === outcomeId);
   const betAmount = parseFloat(amountStr) || 0;
@@ -80,7 +88,6 @@ export function TmaPaymentModal({
     setStatus('processing');
     setError('');
     try {
-      await loginWithDKBank(cidNumber);
       const req: DKBankPaymentRequest = {
         amount: betAmount,
         customerPhone: cidNumber,
@@ -187,7 +194,8 @@ export function TmaPaymentModal({
         width: '100%', maxWidth: 460, margin: '0 16px',
         boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
         animation: 'tmaModalUp 0.3s cubic-bezier(0.34,1.56,0.64,1) forwards',
-        maxHeight: '90vh', overflowY: 'auto',
+        maxHeight: `${viewportHeight * 0.9}px`, overflowY: 'auto',
+        display: 'flex', flexDirection: 'column',
       }}>
 
         {/* ── Success ── */}
@@ -258,7 +266,7 @@ export function TmaPaymentModal({
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 36, marginBottom: 8 }}>📲</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 4 }}>OTP Sent</div>
-              <div style={{ fontSize: 13, color: '#9ca3af' }}>Enter the code sent to your DK Bank registered phone</div>
+              <div style={{ fontSize: 13, color: '#9ca3af' }}>Enter the code sent to you via Telegram bot</div>
             </div>
 
             <input

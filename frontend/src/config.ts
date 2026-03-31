@@ -15,7 +15,6 @@ const config = {
   // TELEGRAM BOT
   // ----------------------------------------------------------
   botUsername: "Tara_parimutuel_bot",
-  botToken: "8689268702:AAEW70VsF9M98SAPz4YM9bs-0GJWHxaacaM",
 
   // ----------------------------------------------------------
   // DEPLOYMENT URL

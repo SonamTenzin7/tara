@@ -107,7 +107,7 @@ export class TelegramService {
     const keyboard = this.createMarketKeyboard([market])
 
     for (const user of users) {
-      await this.sendMessage(user.telegramChatId, message, keyboard)
+      await this.sendMessage(Number(user.telegramId), message, keyboard)
     }
 
     this.logger.log(`Market announcement sent to ${users.length} users: ${market.title}`)
@@ -118,10 +118,10 @@ export class TelegramService {
       where: { id: bet.userId } 
     })
     
-    if (!user?.telegramChatId) return
+    if (!user?.telegramId) return
 
     const message = this.formatBetResult(bet, market)
-    await this.sendMessage(user.telegramChatId, message)
+    await this.sendMessage(Number(user.telegramId), message)
     
     // Update user streak
     await this.updateUserStreak(user.id, bet.status === BetStatus.WON)
@@ -192,7 +192,7 @@ export class TelegramService {
 
   private async sendPortfolioView(chatId: number): Promise<void> {
     const user = await this.userRepository.findOne({ 
-      where: { telegramChatId: chatId } 
+      where: { telegramId: String(chatId) }
     })
     
     if (!user) {
@@ -225,8 +225,8 @@ export class TelegramService {
       const userWithChat = await this.userRepository.findOne({ 
         where: { id: userId } 
       })
-      if (userWithChat?.telegramChatId) {
-        await this.sendMessage(userWithChat.telegramChatId, 
+      if (userWithChat?.telegramId) {
+        await this.sendMessage(Number(userWithChat.telegramId),
           `🔥 ${newStreak} wins in a row! You're on fire! 🔥`)
       }
     }
@@ -301,7 +301,7 @@ export class TelegramService {
 
   async broadcastMessage(message: string, targetUsers?: string[]): Promise<void> {
     let query = this.userRepository.createQueryBuilder('user')
-      .where('user.telegramChatId IS NOT NULL')
+      .where('user.telegramId IS NOT NULL')
     
     if (targetUsers && targetUsers.length > 0) {
       query = query.andWhere('user.id IN (:...ids)', { ids: targetUsers })
@@ -316,7 +316,7 @@ export class TelegramService {
       
       await Promise.all(
         batch.map(user => 
-          this.sendMessage(user.telegramChatId, message)
+          this.sendMessage(Number(user.telegramId), message)
             .catch(error => this.logger.error(`Failed to send to ${user.id}`, error))
         )
       )
