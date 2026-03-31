@@ -1,14 +1,29 @@
 import { useEffect, useState } from "react";
 import { getMe, getMyTransactions, type AuthUser, type Transaction } from "@/api/client";
+import { 
+  ArrowDownLeft, 
+  ArrowUpRight, 
+  Target, 
+  Trophy, 
+  RotateCcw, 
+  Lock, 
+  Unlock,
+  Wallet,
+  Plus,
+  ArrowUpCircle,
+  Clock,
+  AlertCircle
+} from "lucide-react";
+import "./WalletPage.css";
 
-const TX_ICON: Record<Transaction["type"], string> = {
-  deposit: "⬆️",
-  withdrawal: "⬇️",
-  bet_placed: "🎯",
-  bet_payout: "🏆",
-  refund: "↩️",
-  dispute_bond: "🔒",
-  dispute_refund: "🔓",
+const TX_ICON: Record<Transaction["type"], React.ReactNode> = {
+  deposit: <ArrowDownLeft size={20} />,
+  withdrawal: <ArrowUpRight size={20} />,
+  bet_placed: <Target size={20} />,
+  bet_payout: <Trophy size={20} />,
+  refund: <RotateCcw size={20} />,
+  dispute_bond: <Lock size={20} />,
+  dispute_refund: <Unlock size={20} />,
 };
 
 const TX_LABEL: Record<Transaction["type"], string> = {
@@ -24,36 +39,33 @@ const TX_LABEL: Record<Transaction["type"], string> = {
 function TxRow({ tx }: { tx: Transaction }) {
   const isCredit = tx.amount > 0;
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12,
-      padding: "12px 0", borderBottom: "1px solid var(--glass-border)",
-    }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: "50%",
-        background: "var(--glass-bg)", border: "1px solid var(--glass-border)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 18, flexShrink: 0,
-      }}>
+    <div className="tx-row">
+      <div className="tx-icon-container">
         {TX_ICON[tx.type]}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: "0.85rem", color: "var(--text-main)" }}>
+      <div className="tx-info">
+        <div className="tx-label">
           {TX_LABEL[tx.type]}
         </div>
         {tx.note && (
-          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="tx-note">
             {tx.note}
           </div>
         )}
-        <div style={{ fontSize: "0.72rem", color: "var(--text-subtle)" }}>
-          {new Date(tx.createdAt).toLocaleString()}
+        <div className="tx-date">
+          {new Date(tx.createdAt).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
         </div>
       </div>
-      <div style={{ textAlign: "right", flexShrink: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: "0.9rem", color: isCredit ? "#22c55e" : "#ef4444" }}>
-          {isCredit ? "+" : ""}BTN {Number(tx.amount).toLocaleString()}
+      <div className="tx-amount-col">
+        <div className={`tx-amount ${isCredit ? 'credit' : 'debit'}`}>
+          {isCredit ? "+" : ""} {Number(tx.amount).toLocaleString()}
         </div>
-        <div style={{ fontSize: "0.7rem", color: "var(--text-subtle)" }}>
+        <div className="tx-balance">
           Bal {Number(tx.balanceAfter).toLocaleString()}
         </div>
       </div>
@@ -74,63 +86,79 @@ export function PwaWalletPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalIn = txs.filter((t) => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0);
-  const totalOut = txs.filter((t) => t.amount < 0).reduce((s, t) => s + Number(t.amount), 0);
+  const totalIn = txs.filter((t) => Number(t.amount) > 0).reduce((s, t) => s + Number(t.amount), 0);
+  const totalOut = txs.filter((t) => Number(t.amount) < 0).reduce((s, t) => s + Number(t.amount), 0);
 
   return (
-    <div style={{ maxWidth: 700, margin: "0 auto", padding: "24px 16px" }}>
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: 20, color: "var(--text-main)" }}>
-        Wallet
-      </h1>
+    <div className="wallet-container">
+      <h1 className="wallet-header">Wallet</h1>
 
       {loading && (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-subtle)" }}>Loading…</div>
+        <div className="loading-container">
+          <div className="spinner" />
+          <span>Syncing your balance...</span>
+        </div>
       )}
+
       {error && (
-        <div style={{ textAlign: "center", padding: "40px 0", color: "#ef4444" }}>{error}</div>
+        <div className="empty-state">
+          <AlertCircle size={48} color="#ef4444" />
+          <p style={{ color: "#ef4444" }}>{error}</p>
+          <button onClick={() => window.location.reload()} className="action-btn">
+            Try Again
+          </button>
+        </div>
       )}
 
       {!loading && !error && profile && (
         <>
           {/* Balance card */}
-          <div style={{
-            background: "linear-gradient(135deg, var(--accent) 0%, #2b7fdb 100%)",
-            borderRadius: 18, padding: "24px 24px 20px", marginBottom: 24,
-            boxShadow: "0 8px 32px rgba(62,207,110,0.2)",
-          }}>
-            <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.7)", fontWeight: 600, marginBottom: 4 }}>
-              Available Balance
+          <div className="balance-card">
+            <div className="balance-label">Available Balance</div>
+            <div className="balance-amount">
+              <span className="balance-currency">BTN</span>
+              {Number(profile.creditsBalance).toLocaleString()}
             </div>
-            <div style={{ fontSize: "2rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.03em" }}>
-              BTN {Number(profile.creditsBalance).toLocaleString()}
-            </div>
-            <div style={{ display: "flex", gap: 24, marginTop: 16 }}>
-              <div>
-                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)" }}>Total In</div>
-                <div style={{ fontSize: "0.9rem", color: "#fff", fontWeight: 700 }}>+BTN {totalIn.toLocaleString()}</div>
+            <div className="balance-stats">
+              <div className="stat-item">
+                <div className="stat-label">Total In</div>
+                <div className="stat-value">+{totalIn.toLocaleString()}</div>
               </div>
-              <div>
-                <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.6)" }}>Total Out</div>
-                <div style={{ fontSize: "0.9rem", color: "#fff", fontWeight: 700 }}>BTN {Math.abs(totalOut).toLocaleString()}</div>
+              <div className="stat-item">
+                <div className="stat-label">Total Out</div>
+                <div className="stat-value">{Math.abs(totalOut).toLocaleString()}</div>
               </div>
             </div>
           </div>
 
-          {/* Transaction list */}
-          <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-main)", marginBottom: 4 }}>
-            Transaction History
-          </h2>
-          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 12 }}>
-            {txs.length} transaction{txs.length !== 1 ? "s" : ""}
-          </p>
+          {/* Action buttons */}
+          <div className="wallet-actions">
+            <button className="action-btn primary">
+              <Plus size={18} />
+              Deposit
+            </button>
+            <button className="action-btn">
+              <ArrowUpCircle size={18} />
+              Withdraw
+            </button>
+          </div>
 
-          <div style={{
-            background: "var(--glass-bg)", border: "1px solid var(--glass-border)",
-            borderRadius: 14, padding: "0 16px",
-          }}>
+          {/* Transaction list */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
+            <div>
+              <h2 className="section-title">History</h2>
+              <div className="section-subtitle">
+                {txs.length} transaction{txs.length !== 1 ? "s" : ""}
+              </div>
+            </div>
+            <Clock size={16} color="var(--text-subtle)" style={{ marginBottom: 20 }} />
+          </div>
+
+          <div className="transactions-list">
             {txs.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-subtle)" }}>
-                No transactions yet
+              <div className="empty-state">
+                <Wallet size={48} />
+                <p>No transactions yet</p>
               </div>
             ) : (
               txs.map((tx) => <TxRow key={tx.id} tx={tx} />)

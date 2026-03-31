@@ -23,13 +23,26 @@ export const DKBankBetPage: FC = () => {
   const [amount, setAmount] = useState("");
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [betSuccess, setBetSuccess] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
 
   useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handleResize = () => setViewportHeight(vv.height);
+    vv.addEventListener('resize', handleResize);
+    return () => vv.removeEventListener('resize', handleResize);
+  }, []);
+
+  const fetchMarketData = () => {
     if (!id) return;
     getMarket(id)
       .then(setMarket)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchMarketData();
   }, [id]);
 
   const handlePaymentSuccess = async () => {
@@ -89,7 +102,7 @@ export const DKBankBetPage: FC = () => {
 
   return (
     <Page back>
-      <div style={{ padding: "20px 16px 100px", maxWidth: 480, margin: "0 auto", background: "#f5f5f7", minHeight: "100vh" }}>
+      <div style={{ padding: "48px 16px 100px", maxWidth: 480, margin: "0 auto", background: "#f5f5f7", minHeight: "100vh" }}>
 
         {/* Question */}
         <div style={{ marginBottom: 24 }}>
@@ -249,7 +262,8 @@ export const DKBankBetPage: FC = () => {
         <div style={{
           position: "fixed",
           bottom: 0, left: 0, right: 0,
-          padding: "12px 16px 28px",
+          padding: "12px 16px",
+          paddingBottom: viewportHeight < window.innerHeight ? "12px" : "28px",
           background: "#ffffff",
           borderTop: "1px solid #f0f0f0",
           boxShadow: "0 -2px 8px rgba(0,0,0,0.06)",

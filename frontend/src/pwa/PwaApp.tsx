@@ -1,21 +1,22 @@
-import { HashRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { PwaFeedPage } from "./pages/PwaFeedPage";
 import { PwaMarketsPage } from "./pages/PwaMarketsPage";
 import { PwaMarketDetailPage } from "./pages/PwaMarketDetailPage";
 import { PwaPaymentTestPage } from "./pages/PwaPaymentTestPage";
-import { PwaMyBetsPage } from "./pages/PwaMyBetsPage";
-import { PwaWalletPage } from "./pages/PwaWalletPage";
-import { PwaResultsPage } from "./pages/PwaResultsPage";
+// Disabled: betting is through Telegram only
+// import { PwaMyBetsPage } from "./pages/PwaMyBetsPage";
+// import { PwaWalletPage } from "./pages/PwaWalletPage";
+// import { PwaResultsPage } from "./pages/PwaResultsPage";
+// import { ProtectedRoute } from "./components/ProtectedRoute";
 import { PwaBottomNav } from "./components/PwaBottomNav";
-import { ProtectedRoute } from "./components/ProtectedRoute";
-import { useAuth } from "./hooks/useAuth";
+// import { useAuth } from "./hooks/useAuth";
 
 import { TonConnectUIProvider } from "@tonconnect/ui-react";
 import { publicUrl } from "@/helpers/publicUrl.ts";
 
 function PwaLayout() {
-  const { isAuthenticated, setIsAuthenticated } = useAuth();
+  // const { isAuthenticated, setIsAuthenticated } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -99,8 +100,8 @@ function PwaLayout() {
             Telegram
           </a>
           
-          {/* Desktop-only nav links */}
-          {!isMobile && [
+          {/* Desktop-only nav links — disabled: betting is through Telegram only */}
+          {/* {!isMobile && [
             { to: "/my-bets", label: "My Bets" },
             { to: "/results", label: "Results" },
             { to: "/wallet", label: "Wallet" },
@@ -117,7 +118,7 @@ function PwaLayout() {
             })}>
               {label}
             </NavLink>
-          ))}
+          ))} */}
         </div>
 
         </div>
@@ -129,7 +130,8 @@ function PwaLayout() {
           <Route path="/markets" element={<PwaMarketsPage />} />
           <Route path="/market/:id" element={<PwaMarketDetailPage />} />
           <Route path="/payment-test" element={<PwaPaymentTestPage />} />
-          <Route path="/my-bets" element={
+          {/* Disabled: betting is through Telegram only */}
+          {/* <Route path="/my-bets" element={
             isAuthenticated ? <PwaMyBetsPage /> : <ProtectedRoute onLogin={() => setIsAuthenticated(true)}>{null}</ProtectedRoute>
           } />
           <Route path="/wallet" element={
@@ -137,7 +139,7 @@ function PwaLayout() {
           } />
           <Route path="/results" element={
             isAuthenticated ? <PwaResultsPage /> : <ProtectedRoute onLogin={() => setIsAuthenticated(true)}>{null}</ProtectedRoute>
-          } />
+          } /> */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>

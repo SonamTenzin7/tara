@@ -1,5 +1,5 @@
-import { createHmac, createHash } from "crypto";
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { createHmac } from "crypto";
+import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
@@ -20,6 +20,8 @@ export interface TelegramInitData {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(AuthMethod) private authMethodRepo: Repository<AuthMethod>,
@@ -30,8 +32,9 @@ export class AuthService {
 
   // ── HMAC-SHA-256 Telegram initData validation ──────────────────────────────
   validateTelegramInitData(rawInitData: string): TelegramInitData {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
     if (!botToken) throw new UnauthorizedException("Bot token not configured");
+    this.logger.debug(`[Auth] Using bot token: id=${botToken.split(':')[0]} len=${botToken.length}`);
 
     const params = new URLSearchParams(rawInitData);
     const hash = params.get("hash");
@@ -39,7 +42,7 @@ export class AuthService {
 
     // Build data-check string: sorted key=value pairs excluding hash and signature
     params.delete("hash");
-    params.delete("signature"); // signature uses Ed25519, not part of HMAC check
+    // Note: signature IS included in the data-check string for newer bots
     const dataCheckString = Array.from(params.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
@@ -54,12 +57,15 @@ export class AuthService {
       .digest("hex");
 
     if (expectedHash !== hash) {
+      this.logger.warn(`[Auth] initData hash mismatch.\n  Expected : ${expectedHash}\n  Got      : ${hash}\n  dataCheckString:\n${dataCheckString}\n  rawInitData (full): ${rawInitData}`);
       throw new UnauthorizedException("Invalid Telegram initData signature");
     }
 
     // Check freshness: reject if older than 24h
     const authDate = parseInt(params.get("auth_date") || "0", 10);
-    if (Date.now() / 1000 - authDate > 86400) {
+    const ageSeconds = Math.floor(Date.now() / 1000 - authDate);
+    if (ageSeconds > 86400) {
+      this.logger.warn(`[Auth] initData expired — age: ${ageSeconds}s`);
       throw new UnauthorizedException("initData is expired");
     }
 
@@ -80,27 +86,32 @@ export class AuthService {
     });
 
     if (!authMethod) {
-      // New user
-      const user = this.userRepo.create({
-        telegramId: providerId,
-        firstName: tgUser.first_name,
-        lastName: tgUser.last_name,
-        username: tgUser.username,
-        photoUrl: tgUser.photo_url,
-      });
-      await this.userRepo.save(user);
+      // Check if a user row already exists for this telegramId (orphaned — no auth_method yet)
+      let user = await this.userRepo.findOneBy({ telegramId: providerId });
 
-      // Seed 1000 starter credits as a transaction entry
-      await this.transactionRepo.save(
-        this.transactionRepo.create({
-          type: TransactionType.DEPOSIT,
-          amount: 1000,
-          balanceBefore: 0,
-          balanceAfter: 1000,
-          userId: user.id,
-          note: "Starter credits",
-        }),
-      );
+      if (!user) {
+        // Brand new user
+        user = this.userRepo.create({
+          telegramId: providerId,
+          firstName: tgUser.first_name,
+          lastName: tgUser.last_name,
+          username: tgUser.username,
+          photoUrl: tgUser.photo_url,
+        });
+        await this.userRepo.save(user);
+
+        // Seed 1000 starter credits
+        await this.transactionRepo.save(
+          this.transactionRepo.create({
+            type: TransactionType.DEPOSIT,
+            amount: 1000,
+            balanceBefore: 0,
+            balanceAfter: 1000,
+            userId: user.id,
+            note: "Starter credits",
+          }),
+        );
+      }
 
       authMethod = this.authMethodRepo.create({
         provider: AuthProvider.TELEGRAM,
@@ -146,6 +157,7 @@ export class AuthService {
         dkCid: cid,
         dkAccountNumber: account.accountNumber,
         dkAccountName: account.accountName,
+        phoneNumber: account.phoneNumber || null,
       });
       await this.userRepo.save(user);
 
@@ -175,6 +187,7 @@ export class AuthService {
         dkCid: cid,
         dkAccountNumber: account.accountNumber,
         dkAccountName: account.accountName,
+        phoneNumber: account.phoneNumber || null,
       });
     }
 

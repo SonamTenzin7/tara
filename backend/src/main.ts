@@ -25,6 +25,9 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Global API prefix — all routes are /api/*
+  app.setGlobalPrefix("api");
+
   // Global validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
@@ -36,7 +39,7 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("docs", app, document);
+  SwaggerModule.setup("api/docs", app, document);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);

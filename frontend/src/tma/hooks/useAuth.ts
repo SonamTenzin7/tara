@@ -40,8 +40,10 @@ export function useAuth() {
       }
 
       // ── Case 2: use TMA SDK's initData (works in real Telegram AND mock) ─
-      // tmaInitData.raw() returns the raw query string that was passed by Telegram
-      const raw = tmaInitData.raw();
+      // Prefer window.Telegram.WebApp.initData (exact string Telegram signed).
+      // Fall back to tmaInitData.raw() for mock/dev environments.
+      const raw =
+        (window as any).Telegram?.WebApp?.initData || tmaInitData.raw();
       if (raw) {
         const { user, token } = await loginWithTelegram(raw);
         setState({ user, token, loading: false, error: null });

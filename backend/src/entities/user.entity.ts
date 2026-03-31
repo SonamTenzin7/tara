@@ -22,9 +22,6 @@ export class User {
   telegramId: string; // Telegram numeric user ID as string
 
   @Column({ nullable: true })
-  telegramChatId: number; // Telegram chat ID for notifications
-
-  @Column({ nullable: true })
   telegramStreak: number; // Current winning streak in Telegram
 
   @Column({ nullable: true })
@@ -53,6 +50,9 @@ export class User {
 
   @Column({ nullable: true })
   dkAccountName: string; // Full name from DK Bank account inquiry
+
+  @Column({ nullable: true })
+  phoneNumber: string; // Phone number from DK Bank account
 
   @CreateDateColumn()
   createdAt: Date;

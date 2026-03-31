@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from "@nestjs/common";
+import { Injectable, BadRequestException, Logger, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import { RedisService } from "../redis/redis.service";
@@ -25,8 +25,12 @@ const VALID_TRANSITIONS: Record<MarketStatus, MarketStatus[]> = {
 };
 
 @Injectable()
-export class ParimutuelEngine {
+export class ParimutuelEngine implements OnModuleInit {
   private readonly logger = new Logger(ParimutuelEngine.name);
+
+  onModuleInit() {
+    this.logger.log("ParimutuelEngine [v2] initialized with dynamic calculation support");
+  }
 
   constructor(
     @InjectRepository(Market) private marketRepo: Repository<Market>,
@@ -88,14 +92,21 @@ export class ParimutuelEngine {
       return await this.dataSource.transaction(async (em) => {
         // Pessimistic write lock ensures only one DB transaction modifies this
         // market's pool at a time, even if the Redis lock is unavailable.
+        // 1. Lock the market record (using QueryBuilder to avoid eager joins)
         const market = await em
           .getRepository(Market)
           .createQueryBuilder("m")
           .setLock("pessimistic_write")
           .where("m.id = :marketId", { marketId })
-          .leftJoinAndSelect("m.outcomes", "o")
           .getOne();
         if (!market) throw new BadRequestException("Market not found");
+
+        // 2. Fetch outcomes separately
+        market.outcomes = await em.find(Outcome, {
+          where: { marketId },
+          order: { id: "ASC" },
+        });
+
         if (market.status !== MarketStatus.OPEN)
           throw new BadRequestException("Market is not open for betting");
 
@@ -129,7 +140,7 @@ export class ParimutuelEngine {
         // Calculate LMSR probabilities (for display)
         const lmsrProbs = this.lmsrService.calculateProbabilities(
           market.outcomes,
-          1000, // Liquidity parameter in BTN
+          Number(market.liquidityParam) || 1000, // Liquidity parameter from market or default
         );
 
         // Update LMSR probabilities for all outcomes

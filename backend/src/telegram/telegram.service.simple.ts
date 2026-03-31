@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { HttpService } from '@nestjs/axios'
+import { firstValueFrom } from 'rxjs'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
 import { User } from '../entities/user.entity'
@@ -30,8 +31,8 @@ export class TelegramSimpleService {
         disable_web_page_preview: false
       }
 
-      await this.httpService.post(url, payload)
-      this.logger.log(`Message sent to chat ${chatId}: ${text}`)
+      await firstValueFrom(this.httpService.post(url, payload))
+      this.logger.log(`Message sent to chat ${chatId}`)
     } catch (error) {
       this.logger.error(`Failed to send message to chat ${chatId}`, error)
     }
@@ -52,12 +53,12 @@ export class TelegramSimpleService {
       where: { id: bet.userId } 
     })
     
-    if (!user?.telegramChatId) return
+    if (!user?.telegramId) return
 
     const result = bet.status === BetStatus.WON ? '✅ WON' : '❌ LOST'
     const message = `🎯 <b>Bet Result</b>\n\n📊 ${market.title}\n📈 Result: ${result}\n💰 Amount: $${bet.amount}`
-    
-    await this.sendMessage(user.telegramChatId, message)
+
+    await this.sendMessage(Number(user.telegramId), message)
     
     this.logger.log(`Bet result sent to user ${user.id}: ${bet.status}`)
   }

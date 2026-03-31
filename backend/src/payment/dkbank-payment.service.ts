@@ -19,6 +19,7 @@ import { Transaction, TransactionType } from "../entities/transaction.entity";
 import { PaymentOtp, OtpStatus } from "../entities/payment-otp.entity";
 import { DKGatewayService } from "./services/dk-gateway/dk-gateway.service";
 import { RedisService } from "../redis/redis.service";
+import { TelegramSimpleService } from "../telegram/telegram.service.simple";
 
 /** Shape stored in Redis for an active OTP session. */
 interface OtpSession {
@@ -33,6 +34,9 @@ const otpSessionKey = (paymentId: string) => `tara:otp:${paymentId}`;
 
 /** OTP window: 10 minutes to match typical DK Bank OTP validity. */
 const OTP_TTL_MS = 10 * 60 * 1000;
+
+/** Telegram OTP window: 60 seconds. */
+const TG_OTP_TTL_S = 60;
 
 export interface DKBankPaymentRequest {
   amount: number;
@@ -80,6 +84,7 @@ export class DKBankPaymentService {
     private readonly dkGateway: DKGatewayService,
     private readonly configService: ConfigService,
     private readonly redis: RedisService,
+    private readonly telegramService: TelegramSimpleService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(PaymentOtp) private readonly otpRepo: Repository<PaymentOtp>,
@@ -125,52 +130,69 @@ export class DKBankPaymentService {
     });
     await this.paymentRepo.save(payment);
 
-    // ── Staging bypass: skip all DK API calls and credit balance directly ────
+    // ── Staging: generate OTP and send via Telegram ──────────────────────────
     const bypassOtp = this.configService.get<string>("DK_STAGING_OTP_BYPASS");
     if (bypassOtp) {
-      this.logger.warn(`[STAGING BYPASS] Skipping DK API calls for payment ${payment.id} — crediting ${amount} BTN directly`);
-      await this.applyDKStatusUpdate({
-        userId,
-        paymentId: payment.id,
-        dkRaw: { bypass: true },
-        dkStatus: "SUCCESS",
-        dkStatusDesc: "Staging bypass",
-        isFromWebhook: false,
-      });
-
-      // Record OTP as immediately verified (staging has no real OTP)
+      const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
       const now = new Date();
       const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
+
+      // Store the OTP in Redis for validation (60 seconds)
+      await this.redis.setJsonEx<{ otp: string; userId: string }>(
+        `tara:tg-otp:${payment.id}`,
+        TG_OTP_TTL_S,
+        { otp: generatedOtp, userId },
+      );
+
+      // Record pending OTP in DB
       await this.otpRepo.save(this.otpRepo.create({
         paymentId: payment.id,
         userId,
         marketId: dto.marketId || null,
         disputeId: dto.disputeId || null,
-        status: OtpStatus.VERIFIED,
+        status: OtpStatus.PENDING,
         expiresAt,
         lastRequestedAt: now,
-        verifiedAt: now,
+        verifiedAt: null,
         requestCount: 1,
         failedAttempts: 0,
         bfsTxnId: null,
       }));
       await this.redis.setJsonEx<OtpSession>(otpSessionKey(payment.id), OTP_TTL_MS / 1000, {
-        status: OtpStatus.VERIFIED,
+        status: OtpStatus.PENDING,
         expiresAt: expiresAt.toISOString(),
         bfsTxnId: null,
         failedAttempts: 0,
         userId,
       });
 
+      // Send OTP via Telegram if user has a Telegram account;
+      // otherwise fall back to the bypass OTP (bypassOtp value) so DK-only users can still pay in staging.
+      if (user.telegramId) {
+        await this.telegramService.sendMessage(
+          Number(user.telegramId),
+          `🔐 <b>Tara Payment OTP</b>\n\nYour one-time code:\n\n<code>${generatedOtp}</code>\n\n💰 Amount: <b>Nu. ${amount}</b>\n⏳ Valid for 60 seconds.`,
+        ).catch(err => this.logger.warn(`[STAGING] Failed to send OTP via Telegram: ${err.message}`));
+      } else {
+        // No Telegram — store the bypass OTP so the user can enter it manually (shown in staging UI)
+        await this.redis.setJsonEx<{ otp: string; userId: string }>(
+          `tara:tg-otp:${payment.id}`,
+          TG_OTP_TTL_S,
+          { otp: bypassOtp, userId },
+        );
+        this.logger.warn(`[STAGING] User ${userId} has no Telegram (phone: ${user.phoneNumber ?? 'unknown'}) — using bypass OTP`);
+      }
+
       return {
         success: true,
         paymentId: payment.id,
-        status: "success" as any,
+        status: "pending",
         amount,
         currency: "BTN",
         method: "dkbank",
-        message: "Payment successful.",
+        message: "OTP sent to your Telegram. Please enter it to complete the payment.",
         timestamp: now.toISOString(),
+        otpRequired: true,
       };
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -264,6 +286,59 @@ export class DKBankPaymentService {
       throw new BadRequestException(`Payment is already ${payment.status}`);
     }
 
+    // ── Staging: validate Telegram OTP ───────────────────────────────────────
+    // Check this EARLY to skip standard metadata validation which is only for live DK Bank calls.
+    const bypassOtp = this.configService.get<string>("DK_STAGING_OTP_BYPASS");
+    if (bypassOtp) {
+      const tgOtpSession = await this.redis.getJson<{ otp: string; userId: string }>(`tara:tg-otp:${paymentId}`);
+
+      if (!tgOtpSession) {
+        throw new BadRequestException("OTP has expired. Please initiate a new payment.");
+      }
+      if (tgOtpSession.userId !== userId) {
+        throw new BadRequestException("Payment not found.");
+      }
+      if (tgOtpSession.otp !== otp) {
+        throw new BadRequestException("Invalid OTP. Please check your Telegram and try again.");
+      }
+
+      this.logger.log(`[STAGING] Telegram OTP verified for payment ${payment.id}`);
+      await this.applyDKStatusUpdate({
+        userId,
+        paymentId: payment.id,
+        dkRaw: { bypass: true },
+        dkStatus: "SUCCESS",
+        dkStatusDesc: "Staging Telegram OTP verified",
+        isFromWebhook: false,
+      });
+
+      // Load the OTP tracking record for this payment (DB - for verify status)
+      const otpRecord = await this.otpRepo.findOne({
+        where: { paymentId, userId },
+        order: { createdAt: "DESC" },
+      });
+      if (otpRecord) {
+        const now = new Date();
+        otpRecord.status = OtpStatus.VERIFIED;
+        otpRecord.verifiedAt = now;
+        await this.otpRepo.save(otpRecord);
+      }
+      await this.redis.del(`tara:tg-otp:${paymentId}`, otpSessionKey(payment.id));
+      await this.redis.del(`tara:cache:balance:${userId}`);
+
+      return {
+        success: true,
+        paymentId: payment.id,
+        status: "success" as any,
+        amount: Number(payment.amount),
+        currency: payment.currency,
+        method: "dkbank",
+        message: "Payment confirmed. Balance credited.",
+        timestamp: new Date().toISOString(),
+      };
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const meta = payment.metadata || {};
     const bfsTxnId = meta.bfsTxnId;
     const stanNumber = meta.stanNumber;
@@ -307,43 +382,6 @@ export class DKBankPaymentService {
       await this.otpRepo.save(otpRecord);
       throw new BadRequestException("OTP has expired. Please initiate a new payment.");
     }
-
-    // ── Staging bypass ────────────────────────────────────────────────────────
-    const bypassOtp = this.configService.get<string>("DK_STAGING_OTP_BYPASS");
-    if (bypassOtp && otp === bypassOtp) {
-      this.logger.warn(`[STAGING BYPASS] OTP matched bypass code — crediting balance directly without DK debit_request`);
-      await this.applyDKStatusUpdate({
-        userId,
-        paymentId: payment.id,
-        dkRaw: { bypass: true },
-        dkStatus: "SUCCESS",
-        dkStatusDesc: "Staging bypass",
-        isFromWebhook: false,
-      });
-
-      if (otpRecord) {
-        const now = new Date();
-        otpRecord.status = OtpStatus.VERIFIED;
-        otpRecord.verifiedAt = now;
-        await this.otpRepo.save(otpRecord);
-      }
-      // Remove Redis session on verification
-      await this.redis.del(otpSessionKey(payment.id));
-      // Invalidate balance cache
-      await this.redis.del(`tara:cache:balance:${userId}`);
-
-      return {
-        success: true,
-        paymentId: payment.id,
-        status: "success" as any,
-        amount: Number(payment.amount),
-        currency: payment.currency,
-        method: "dkbank",
-        message: "[STAGING] Payment bypassed and balance credited.",
-        timestamp: new Date().toISOString(),
-      };
-    }
-    // ─────────────────────────────────────────────────────────────────────────
 
     try {
       const result = await this.dkGateway.executeTransactionWithOtp({
