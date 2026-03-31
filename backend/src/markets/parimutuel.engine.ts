@@ -183,7 +183,7 @@ export class ParimutuelEngine implements OnModuleInit {
     }
   }
 
-  // ── Transition market state ───────────────────────────────────────────────
+  // Transition market state 
   async transitionMarket(marketId: string, to: MarketStatus): Promise<Market> {
     const market = await this.marketRepo.findOneBy({ id: marketId });
     if (!market) throw new BadRequestException("Market not found");
@@ -198,7 +198,7 @@ export class ParimutuelEngine implements OnModuleInit {
     return this.marketRepo.save(market);
   }
 
-  // ── Propose resolution: open 24h dispute window ──────────────────────────
+  // Propose resolution: open 24h dispute window 
   async proposeResolution(marketId: string, proposedOutcomeId: string): Promise<Market> {
     const market = await this.marketRepo.findOne({
       where: { id: marketId },
@@ -217,7 +217,7 @@ export class ParimutuelEngine implements OnModuleInit {
     return this.marketRepo.save(market);
   }
 
-  // ── Resolve market: mark winner & trigger settlement ─────────────────────
+  // Resolve market: mark winner & trigger settlement 
   async resolveMarket(
     marketId: string,
     winningOutcomeId: string,
@@ -249,7 +249,7 @@ export class ParimutuelEngine implements OnModuleInit {
     return this.settleMarket(market, winner);
   }
 
-  // ── Refund dispute bonds ──────────────────────────────────────────────────
+  // Refund dispute bonds 
   private async refundDisputeBonds(marketId: string): Promise<void> {
     const disputes = await this.disputeRepo.find({
       where: { marketId, bondRefunded: false },
@@ -271,7 +271,7 @@ export class ParimutuelEngine implements OnModuleInit {
     }
   }
 
-  // ── Settlement: distribute payouts ───────────────────────────────────────
+  // Settlement: distribute payouts 
   private async settleMarket(
     market: Market,
     winner: Outcome,
@@ -343,7 +343,7 @@ export class ParimutuelEngine implements OnModuleInit {
     });
   }
 
-  // ── Cancel market: refund all bets ───────────────────────────────────────
+  // Cancel market: refund all bets 
   async cancelMarket(marketId: string): Promise<void> {
     await this.dataSource.transaction(async (em) => {
       const market = await em.findOne(Market, {

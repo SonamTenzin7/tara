@@ -4,6 +4,7 @@ import { Page } from "@/tma/components/Page";
 import { getMarkets, placeBet, type Market } from "@/api/client";
 import { useAuth } from "@/tma/hooks/useAuth";
 import { TmaPaymentModal } from "@/tma/components/TmaPaymentModal";
+import { Link } from "@/tma/components/Link/Link";
 import type { PaymentResponse } from "@/types/payment";
 
 function outcomeColor(rank: number, total: number): string {
@@ -84,9 +85,11 @@ function MarketCard({ market, onBet }: {
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
         {isResolving ? (
-          <div style={{ flex: 1, padding: "10px", borderRadius: 12, background: "#fffbeb", border: "1px dashed #f59e0b", fontSize: "0.75rem", color: "#b45309", fontWeight: 700, textAlign: "center" }}>
-            Resolving
-          </div>
+          <Link to={`/market/${market.id}`} style={{ flex: 1, textDecoration: "none" }}>
+            <div style={{ padding: "10px", borderRadius: 12, background: "#fffbeb", border: "1px dashed #f59e0b", fontSize: "0.75rem", color: "#b45309", fontWeight: 700, textAlign: "center" }}>
+              Dispute Window ▶
+            </div>
+          </Link>
         ) : isUpcoming ? (
           <div style={{ flex: 1, padding: "10px", borderRadius: 12, background: "#f1f5f9", fontSize: "0.75rem", color: "#64748b", fontWeight: 700, textAlign: "center" }}>
             Opens {countdown}
