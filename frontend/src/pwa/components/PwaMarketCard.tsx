@@ -1,4 +1,5 @@
 import { useState, useEffect, type FC } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Market } from "@/api/client";
 
 function outcomeColor(rank: number, total: number): string {
@@ -31,6 +32,7 @@ interface PwaMarketCardProps {
 
 export const PwaMarketCard: FC<PwaMarketCardProps> = ({ market, onBet }) => {
   const [showAll, setShowAll] = useState(false);
+  const navigate = useNavigate();
   const isUpcoming = market.status === "upcoming";
   const isResolving = market.status === "resolving";
   const countdown = useCountdown(isUpcoming ? market.opensAt ?? null : market.closesAt);
@@ -68,7 +70,7 @@ export const PwaMarketCard: FC<PwaMarketCardProps> = ({ market, onBet }) => {
       transition: "all 0.2s ease",
       cursor: "pointer",
     }}
-    onClick={() => { window.location.href = `/market/${market.id}`; }}
+    onClick={() => navigate(`/market/${market.id}`)}
     onMouseEnter={(e) => {
       e.currentTarget.style.boxShadow = "var(--shadow-md)";
       e.currentTarget.style.transform = "translateY(-2px)";
