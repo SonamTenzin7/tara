@@ -410,12 +410,16 @@ export class DKGatewayService {
       "/v1/account_auth/pull-payment",
       {
         account_number: params.customerAccountNumber,
-        account_name: params.customerAccountName,
         transaction_datetime: txDatetime,
         stan_number: params.stanNumber,
         transaction_amount: params.amount.toFixed(2),
         payment_desc: params.description,
-        ...(params.customerPhone ? { phone_number: params.customerPhone } : {}),
+        account_name: params.customerAccountName,
+        // DK staging requires phone_number field but cannot send real SMS — use staging placeholder.
+        // In production this will be the customer's real registered phone number.
+        phone_number: this.baseUrl.includes(".sit.")
+          ? "17000000"
+          : params.customerPhone,
         remitter_account_number: params.customerAccountNumber,
         remitter_account_name: params.customerAccountName,
         remitter_bank_id: this.bankCode,

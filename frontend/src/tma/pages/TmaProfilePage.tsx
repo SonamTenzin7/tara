@@ -96,6 +96,7 @@ export const TmaProfilePage: FC = () => {
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   useEffect(() => {
     getMe()
@@ -104,13 +105,23 @@ export const TmaProfilePage: FC = () => {
       .finally(() => setFreshLoading(false));
   }, []);
 
+  const refreshWallet = () => {
+    setBalanceLoading(true);
+    getMe()
+      .then(setFreshUser)
+      .catch(() => {})
+      .finally(() => setBalanceLoading(false));
+    setTxLoading(true);
+    setTxError(null);
+    getMyTransactions()
+      .then(setTxs)
+      .catch((e) => setTxError(e.message))
+      .finally(() => setTxLoading(false));
+  };
+
   useEffect(() => {
-    if (activeTab === "wallet" && txs.length === 0 && !txLoading) {
-      setTxLoading(true);
-      getMyTransactions()
-        .then(setTxs)
-        .catch((e) => setTxError(e.message))
-        .finally(() => setTxLoading(false));
+    if (activeTab === "wallet") {
+      refreshWallet();
     }
   }, [activeTab]);
 
@@ -384,13 +395,119 @@ export const TmaProfilePage: FC = () => {
         {/* ── Wallet Tab ─────────────────────────────────────── */}
         {activeTab === "wallet" && (
           <>
+            {/* Balance card — always shown, amount pulses while loading */}
+            <div style={walletStyles.balanceCard}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div style={walletStyles.balanceLabel}>Available Balance</div>
+                <button
+                  onClick={refreshWallet}
+                  disabled={balanceLoading || txLoading}
+                  style={{
+                    background: "rgba(255,255,255,0.15)",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "4px 8px",
+                    cursor:
+                      balanceLoading || txLoading ? "not-allowed" : "pointer",
+                    color: "#fff",
+                    opacity: balanceLoading || txLoading ? 0.6 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  <RotateCcw
+                    size={12}
+                    style={
+                      balanceLoading
+                        ? { animation: "spin 0.8s linear infinite" }
+                        : {}
+                    }
+                  />
+                  Refresh
+                </button>
+              </div>
+              <div
+                style={{
+                  ...walletStyles.balanceAmount,
+                  opacity: balanceLoading ? 0.5 : 1,
+                  transition: "opacity 0.3s",
+                }}
+              >
+                <span style={walletStyles.balanceCurrency}>BTN</span>
+                {Number(
+                  freshUser?.creditsBalance ?? user?.creditsBalance ?? 0,
+                ).toLocaleString()}
+              </div>
+              <div style={walletStyles.balanceStats}>
+                <div style={walletStyles.statItem}>
+                  <div style={walletStyles.statLabel}>Total In</div>
+                  <div style={walletStyles.statValue}>
+                    +{totalIn.toLocaleString()}
+                  </div>
+                </div>
+                <div style={walletStyles.statItem}>
+                  <div style={walletStyles.statLabel}>Total Out</div>
+                  <div style={walletStyles.statValue}>
+                    {Math.abs(totalOut).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={walletStyles.walletActions}>
+              <button style={walletStyles.actionBtnPrimary}>
+                <Plus size={18} />
+                Deposit
+              </button>
+              <button style={walletStyles.actionBtn}>
+                <ArrowUpCircle size={18} />
+                Withdraw
+              </button>
+            </div>
+
+            {/* Transaction history */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                marginBottom: 12,
+              }}
+            >
+              <div>
+                <h2 style={walletStyles.sectionTitle}>History</h2>
+                <div style={walletStyles.sectionSubtitle}>
+                  {txLoading
+                    ? "Updating…"
+                    : `${txs.length} transaction${txs.length !== 1 ? "s" : ""}`}
+                </div>
+              </div>
+              <Clock size={16} color="#9ca3af" style={{ marginBottom: 20 }} />
+            </div>
+
             {txLoading && (
-              <div style={styles.center}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  padding: "20px 0",
+                }}
+              >
                 <div style={styles.spinner} />
               </div>
             )}
 
-            {txError && (
+            {txError && !txLoading && (
               <div style={walletStyles.emptyState}>
                 <AlertCircle size={48} color="#ef4444" />
                 <p style={{ color: "#ef4444" }}>{txError}</p>
@@ -398,75 +515,16 @@ export const TmaProfilePage: FC = () => {
             )}
 
             {!txLoading && !txError && (
-              <>
-                {/* Balance card */}
-                <div style={walletStyles.balanceCard}>
-                  <div style={walletStyles.balanceLabel}>Available Balance</div>
-                  <div style={walletStyles.balanceAmount}>
-                    <span style={walletStyles.balanceCurrency}>BTN</span>
-                    {Number(user?.creditsBalance ?? 0).toLocaleString()}
+              <div style={walletStyles.txList}>
+                {txs.length === 0 ? (
+                  <div style={walletStyles.emptyState}>
+                    <Wallet size={48} color="#9ca3af" />
+                    <p style={{ color: "#9ca3af" }}>No transactions yet</p>
                   </div>
-                  <div style={walletStyles.balanceStats}>
-                    <div style={walletStyles.statItem}>
-                      <div style={walletStyles.statLabel}>Total In</div>
-                      <div style={walletStyles.statValue}>
-                        +{totalIn.toLocaleString()}
-                      </div>
-                    </div>
-                    <div style={walletStyles.statItem}>
-                      <div style={walletStyles.statLabel}>Total Out</div>
-                      <div style={walletStyles.statValue}>
-                        {Math.abs(totalOut).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div style={walletStyles.walletActions}>
-                  <button style={walletStyles.actionBtnPrimary}>
-                    <Plus size={18} />
-                    Deposit
-                  </button>
-                  <button style={walletStyles.actionBtn}>
-                    <ArrowUpCircle size={18} />
-                    Withdraw
-                  </button>
-                </div>
-
-                {/* Transaction history */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-end",
-                    marginBottom: 12,
-                  }}
-                >
-                  <div>
-                    <h2 style={walletStyles.sectionTitle}>History</h2>
-                    <div style={walletStyles.sectionSubtitle}>
-                      {txs.length} transaction{txs.length !== 1 ? "s" : ""}
-                    </div>
-                  </div>
-                  <Clock
-                    size={16}
-                    color="#9ca3af"
-                    style={{ marginBottom: 20 }}
-                  />
-                </div>
-
-                <div style={walletStyles.txList}>
-                  {txs.length === 0 ? (
-                    <div style={walletStyles.emptyState}>
-                      <Wallet size={48} color="#9ca3af" />
-                      <p style={{ color: "#9ca3af" }}>No transactions yet</p>
-                    </div>
-                  ) : (
-                    txs.map((tx) => <TxRow key={tx.id} tx={tx} />)
-                  )}
-                </div>
-              </>
+                ) : (
+                  txs.map((tx) => <TxRow key={tx.id} tx={tx} />)
+                )}
+              </div>
             )}
           </>
         )}

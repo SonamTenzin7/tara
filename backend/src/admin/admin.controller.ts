@@ -9,6 +9,7 @@ import {
   Patch,
   HttpCode,
   Delete,
+  Request,
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
@@ -23,6 +24,8 @@ import { IsUUID, IsEnum } from "class-validator";
 import { JwtAuthGuard, AdminGuard } from "../auth/guards";
 import { MarketsService, CreateMarketDto } from "../markets/markets.service";
 import { FixturesService } from "./fixtures.service";
+import { AuditService } from "./audit.service";
+import { AuditAction } from "../entities/audit-log.entity";
 import { Market, MarketStatus } from "../entities/market.entity";
 import { Outcome } from "../entities/outcome.entity";
 import { Settlement } from "../entities/settlement.entity";
@@ -57,6 +60,7 @@ export class AdminController {
   constructor(
     private marketsService: MarketsService,
     private fixturesService: FixturesService,
+    private auditService: AuditService,
     @InjectRepository(Settlement)
     private settlementRepo: Repository<Settlement>,
     @InjectRepository(Dispute) private disputeRepo: Repository<Dispute>,
@@ -68,8 +72,21 @@ export class AdminController {
   // ── Markets ────────────────────────────────────────────────────────────────
   @Post("markets")
   @ApiOperation({ summary: "Create a new market with outcomes" })
-  createMarket(@Body() dto: CreateMarketDto) {
-    return this.marketsService.create(dto);
+  async createMarket(@Body() dto: CreateMarketDto, @Request() req) {
+    const market = await this.marketsService.create(dto);
+    await this.auditService.log({
+      adminId: req.user.userId,
+      action: AuditAction.MARKET_CREATE,
+      entityType: "market",
+      entityId: market.id,
+      after: {
+        title: market.title,
+        outcomes: dto.outcomes,
+        closesAt: dto.closesAt,
+      },
+      ipAddress: req.ip,
+    });
+    return market;
   }
 
   @Get("markets")
@@ -88,23 +105,96 @@ export class AdminController {
   @ApiOperation({
     summary: "Transition market state (Upcoming→Open→Closed→Cancelled)",
   })
-  transitionMarket(@Param("id") id: string, @Body() dto: TransitionDto) {
-    return this.marketsService.transition(id, dto.status);
+  async transitionMarket(
+    @Param("id") id: string,
+    @Body() dto: TransitionDto,
+    @Request() req,
+  ) {
+    const before = await this.marketsService.findOne(id);
+    const result = await this.marketsService.transition(id, dto.status);
+    await this.auditService.log({
+      adminId: req.user.userId,
+      action: AuditAction.MARKET_TRANSITION,
+      entityType: "market",
+      entityId: id,
+      before: { status: before.status },
+      after: { status: dto.status },
+      meta: { title: before.title },
+      ipAddress: req.ip,
+    });
+    return result;
   }
 
   @Post("markets/:id/propose")
   @HttpCode(200)
-  @ApiOperation({ summary: "Propose winning outcome — opens 24h dispute window (Closed → Resolving)" })
+  @ApiOperation({
+    summary:
+      "Propose winning outcome — opens 24h dispute window (Closed → Resolving)",
+  })
   @ApiResponse({ status: 200, type: Market })
-  proposeResolution(@Param("id") id: string, @Body() dto: ProposeResolutionDto) {
-    return this.marketsService.proposeResolution(id, dto.proposedOutcomeId);
+  async proposeResolution(
+    @Param("id") id: string,
+    @Body() dto: ProposeResolutionDto,
+    @Request() req,
+  ) {
+    const before = await this.marketsService.findOne(id);
+    const result = await this.marketsService.proposeResolution(
+      id,
+      dto.proposedOutcomeId,
+    );
+    const proposedOutcome = before.outcomes?.find(
+      (o) => o.id === dto.proposedOutcomeId,
+    );
+    await this.auditService.log({
+      adminId: req.user.userId,
+      action: AuditAction.MARKET_PROPOSE,
+      entityType: "market",
+      entityId: id,
+      before: { status: before.status, proposedOutcomeId: null },
+      after: { status: "resolving", proposedOutcomeId: dto.proposedOutcomeId },
+      meta: {
+        title: before.title,
+        proposedOutcomeLabel: proposedOutcome?.label,
+      },
+      ipAddress: req.ip,
+    });
+    return result;
   }
 
   @Post("markets/:id/resolve")
   @HttpCode(200)
-  @ApiOperation({ summary: "Final resolution after dispute window — set winner & auto-settle (Resolving → Settled)" })
-  resolveMarket(@Param("id") id: string, @Body() dto: ResolveDto) {
-    return this.marketsService.resolve(id, dto.winningOutcomeId);
+  @ApiOperation({
+    summary:
+      "Final resolution after dispute window — set winner & auto-settle (Resolving → Settled)",
+  })
+  async resolveMarket(
+    @Param("id") id: string,
+    @Body() dto: ResolveDto,
+    @Request() req,
+  ) {
+    const before = await this.marketsService.findOne(id);
+    const result = await this.marketsService.resolve(id, dto.winningOutcomeId);
+    const winningOutcome = before.outcomes?.find(
+      (o) => o.id === dto.winningOutcomeId,
+    );
+    const totalBets =
+      before.outcomes?.reduce((s, o) => s + Number(o.totalBetAmount), 0) ?? 0;
+    await this.auditService.log({
+      adminId: req.user.userId,
+      action: AuditAction.MARKET_RESOLVE,
+      entityType: "market",
+      entityId: id,
+      before: { status: before.status },
+      after: { status: "settled", winningOutcomeId: dto.winningOutcomeId },
+      meta: {
+        title: before.title,
+        winningOutcomeLabel: winningOutcome?.label,
+        totalPool: before.totalPool,
+        totalBets,
+      },
+      ipAddress: req.ip,
+    });
+    return result;
   }
 
   @Get("markets/:id/disputes")
@@ -118,29 +208,49 @@ export class AdminController {
   @ApiOperation({ summary: "List all disputes across all markets" })
   @ApiResponse({ status: 200, type: [Dispute] })
   getAllDisputes() {
-    return this.disputeRepo.find({
-      order: { createdAt: "DESC" },
-      take: 500,
-    });
+    return this.disputeRepo.find({ order: { createdAt: "DESC" }, take: 500 });
   }
 
   @Post("markets/:id/cancel")
   @HttpCode(200)
   @ApiOperation({ summary: "Cancel market & refund all bets" })
-  cancelMarket(@Param("id") id: string) {
-    return this.marketsService.cancel(id);
+  async cancelMarket(@Param("id") id: string, @Request() req) {
+    const before = await this.marketsService.findOne(id);
+    const result = await this.marketsService.cancel(id);
+    await this.auditService.log({
+      adminId: req.user.userId,
+      action: AuditAction.MARKET_CANCEL,
+      entityType: "market",
+      entityId: id,
+      before: { status: before.status, totalPool: before.totalPool },
+      after: { status: "cancelled" },
+      meta: { title: before.title },
+      ipAddress: req.ip,
+    });
+    return result;
   }
 
   @HttpCode(204)
   @Delete("markets/:id")
   @ApiOperation({ summary: "Delete a market" })
-  deleteMarket(@Param("id") id: string) {
+  async deleteMarket(@Param("id") id: string, @Request() req) {
+    const before = await this.marketsService.findOne(id);
+    await this.auditService.log({
+      adminId: req.user.userId,
+      action: AuditAction.MARKET_DELETE,
+      entityType: "market",
+      entityId: id,
+      before: { title: before.title, status: before.status },
+      ipAddress: req.ip,
+    });
     return this.marketsService.delete(id);
   }
 
   // ── Fixtures ──────────────────────────────────────────────────────────────
   @Get("fixtures")
-  @ApiOperation({ summary: "Fetch upcoming football fixtures from football-data.org" })
+  @ApiOperation({
+    summary: "Fetch upcoming football fixtures from football-data.org",
+  })
   getFixtures(@Query("q") q?: string) {
     return this.fixturesService.getFixtures(q);
   }
@@ -180,8 +290,18 @@ export class AdminController {
   listSettlements() {
     return this.settlementRepo
       .createQueryBuilder("settlement")
-      .leftJoinAndMapOne("settlement.market", Market, "market", "market.id = settlement.marketId")
-      .leftJoinAndMapOne("settlement.outcome", Outcome, "outcome", "outcome.id = settlement.winningOutcomeId")
+      .leftJoinAndMapOne(
+        "settlement.market",
+        Market,
+        "market",
+        "market.id = settlement.marketId",
+      )
+      .leftJoinAndMapOne(
+        "settlement.outcome",
+        Outcome,
+        "outcome",
+        "outcome.id = settlement.winningOutcomeId",
+      )
       .orderBy("settlement.settledAt", "DESC")
       .getMany();
   }
@@ -202,5 +322,26 @@ export class AdminController {
       order: { createdAt: "DESC" },
       take: 500,
     });
+  }
+
+  // ── Audit Logs ─────────────────────────────────────────────────────────────
+  @Get("audit-logs")
+  @ApiOperation({ summary: "Full audit trail of all admin actions" })
+  getAuditLogs(@Query("limit") limit?: string) {
+    return this.auditService.findAll(Number(limit) || 200);
+  }
+
+  @Get("audit-logs/admin/:adminId")
+  @ApiOperation({ summary: "Audit trail for a specific admin account" })
+  getAuditLogsByAdmin(@Param("adminId") adminId: string) {
+    return this.auditService.findByAdmin(adminId);
+  }
+
+  @Get("audit-logs/entity/:entityId")
+  @ApiOperation({
+    summary: "Audit trail for a specific entity (market, user, etc.)",
+  })
+  getAuditLogsByEntity(@Param("entityId") entityId: string) {
+    return this.auditService.findByEntity(entityId);
   }
 }
