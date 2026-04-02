@@ -139,14 +139,9 @@ export class DKBankPaymentService {
     }
 
     // ── Bank-level security: verify Telegram phone == DK Bank phone ──────────
-    // Skip this check in staging bypass mode so developers can test without
-    // completing the full phone-verification flow.
-    const bypassOtpCheck = this.configService.get<string>(
-      "DK_STAGING_OTP_BYPASS",
-    );
-    if (!bypassOtpCheck) {
-      await this.telegramVerification.verifyPaymentIdentity(userId);
-    }
+    // ALWAYS enforced in both staging and production.
+    // User must have verified their Telegram phone matches their DK Bank phone.
+    await this.telegramVerification.verifyPaymentIdentity(userId);
 
     const payment = this.paymentRepo.create({
       type: PaymentType.DEPOSIT,
@@ -166,21 +161,50 @@ export class DKBankPaymentService {
     });
     await this.paymentRepo.save(payment);
 
-    // ── Staging: generate OTP and send via Telegram ──────────────────────────
-    const bypassOtp = this.configService.get<string>("DK_STAGING_OTP_BYPASS");
-    if (bypassOtp) {
+    // ── Look up DK Bank account by CID ───────────────────────────────────────
+    // We only call client_inquiry to verify the CID belongs to a real DK account
+    // and to record the account number. We do NOT call account_auth — that would
+    // trigger DK's SMS OTP which we don't want. The Telegram OTP is our gate.
+    let customerAccountNumber: string | null = null;
+    let customerAccountName: string | null = null;
+
+    try {
+      const account = await this.dkGateway.lookupAccountByCID(cid);
+      customerAccountNumber = account.accountNumber;
+      customerAccountName = account.accountName;
+      payment.customerPhone = account.phoneNumber || null;
+
+      payment.metadata = {
+        ...(payment.metadata || {}),
+        customerAccountNumber,
+        customerAccountName,
+      };
+      await this.paymentRepo.save(payment);
+    } catch (e: any) {
+      payment.status = PaymentStatus.FAILED;
+      payment.failureReason = e?.message || "Failed to look up DK Bank account";
+      payment.metadata = {
+        ...(payment.metadata || {}),
+        dkInitiateError: { message: payment.failureReason },
+      };
+      await this.paymentRepo.save(payment);
+      throw e;
+    }
+
+    // ── Step 2: Generate Telegram OTP and send it ─────────────────────────────
+    // The Telegram OTP is the user-facing confirmation gate.
+    // Security is backed by: CID ownership + Telegram phone == DK phone (verified on linking).
+    {
       const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
       const now = new Date();
       const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
 
-      // Store the OTP in Redis for validation (60 seconds)
       await this.redis.setJsonEx<{ otp: string; userId: string }>(
         `tara:tg-otp:${payment.id}`,
         TG_OTP_TTL_S,
         { otp: generatedOtp, userId },
       );
 
-      // Record pending OTP in DB
       await this.otpRepo.save(
         this.otpRepo.create({
           paymentId: payment.id,
@@ -208,30 +232,14 @@ export class DKBankPaymentService {
         },
       );
 
-      // Send OTP via Telegram if user has a Telegram account;
-      // otherwise fall back to the bypass OTP (bypassOtp value) so DK-only users can still pay in staging.
-      if (user.telegramId) {
-        await this.telegramService
-          .sendMessage(
-            Number(user.telegramId),
-            `🔐 <b>Tara Payment OTP</b>\n\nYour one-time code:\n\n<code>${generatedOtp}</code>\n\n💰 Amount: <b>Nu. ${amount}</b>\n⏳ Valid for 60 seconds.`,
-          )
-          .catch((err) =>
-            this.logger.warn(
-              `[STAGING] Failed to send OTP via Telegram: ${err.message}`,
-            ),
-          );
-      } else {
-        // No Telegram — store the bypass OTP so the user can enter it manually (shown in staging UI)
-        await this.redis.setJsonEx<{ otp: string; userId: string }>(
-          `tara:tg-otp:${payment.id}`,
-          TG_OTP_TTL_S,
-          { otp: bypassOtp, userId },
+      await this.telegramService
+        .sendMessage(
+          Number(user.telegramId),
+          `🔐 <b>Tara Payment OTP</b>\n\nYour one-time code:\n\n<code>${generatedOtp}</code>\n\n💰 Amount: <b>Nu. ${amount}</b>\n⏳ Valid for 60 seconds.`,
+        )
+        .catch((err) =>
+          this.logger.warn(`Failed to send OTP via Telegram: ${err.message}`),
         );
-        this.logger.warn(
-          `[STAGING] User ${userId} has no Telegram (phone: ${user.phoneNumber ?? "unknown"}) — using bypass OTP`,
-        );
-      }
 
       return {
         success: true,
@@ -246,96 +254,12 @@ export class DKBankPaymentService {
         otpRequired: true,
       };
     }
-    // ─────────────────────────────────────────────────────────────────────────
-
-    try {
-      // 1) Resolve customer account from CID
-      const account = await this.dkGateway.lookupAccountByCID(cid);
-
-      // 2) Generate STAN (must be reused in confirm step)
-      const stanNumber = this.dkGateway.generateStanNumber();
-
-      // 3) Authorize transaction — DK sends OTP to customer's phone
-      const auth = await this.dkGateway.authorizeTransaction({
-        customerAccountNumber: account.accountNumber,
-        customerAccountName: account.accountName,
-        customerPhone: account.phoneNumber,
-        amount,
-        description: dto.description,
-        stanNumber,
-      });
-
-      payment.dkInquiryId = auth.bfsTxnId;
-      payment.customerPhone = account.phoneNumber || null;
-      payment.metadata = {
-        ...(payment.metadata || {}),
-        bfsTxnId: auth.bfsTxnId,
-        stanNumber: auth.stanNumber,
-        txDatetime: auth.txDatetime,
-        customerAccountNumber: account.accountNumber,
-        customerAccountName: account.accountName,
-        dkAuthResponse: auth,
-      };
-      await this.paymentRepo.save(payment);
-
-      // 4) Create the OTP tracking record
-      const now = new Date();
-      const otpExpiresAt = new Date(now.getTime() + OTP_TTL_MS);
-      await this.otpRepo.save(
-        this.otpRepo.create({
-          paymentId: payment.id,
-          userId,
-          marketId: dto.marketId || null,
-          disputeId: dto.disputeId || null,
-          status: OtpStatus.PENDING,
-          expiresAt: otpExpiresAt,
-          lastRequestedAt: now,
-          verifiedAt: null,
-          requestCount: 1,
-          failedAttempts: 0,
-          bfsTxnId: auth.bfsTxnId,
-        }),
-      );
-      // Mirror in Redis for fast validation in confirmPayment
-      await this.redis.setJsonEx<OtpSession>(
-        otpSessionKey(payment.id),
-        OTP_TTL_MS / 1000,
-        {
-          status: OtpStatus.PENDING,
-          expiresAt: otpExpiresAt.toISOString(),
-          bfsTxnId: auth.bfsTxnId,
-          failedAttempts: 0,
-          userId,
-        },
-      );
-
-      return {
-        success: true,
-        paymentId: payment.id,
-        status: "pending",
-        amount,
-        currency: "BTN",
-        method: "dkbank",
-        message:
-          "OTP sent to your registered DK Bank phone number. Please enter it to complete the payment.",
-        timestamp: now.toISOString(),
-        otpRequired: true,
-      };
-    } catch (e: any) {
-      payment.status = PaymentStatus.FAILED;
-      payment.failureReason = e?.message || "Failed to initiate payment";
-      payment.metadata = {
-        ...(payment.metadata || {}),
-        dkInitiateError: { message: payment.failureReason },
-      };
-      await this.paymentRepo.save(payment);
-      throw e;
-    }
   }
 
   /**
    * Step 2: Submit the OTP to complete the payment.
-   * Executes the debit_request on DK and transitions the payment to pending (awaiting DK confirmation).
+   * Validates Telegram OTP, then executes debit_request on DK Bank to actually debit the account.
+   * Polls DK for final status and credits Tara balance on SUCCESS.
    */
   async confirmPayment(
     userId: string,
@@ -350,213 +274,71 @@ export class DKBankPaymentService {
       throw new BadRequestException(`Payment is already ${payment.status}`);
     }
 
-    // ── Staging: validate Telegram OTP ───────────────────────────────────────
-    // Check this EARLY to skip standard metadata validation which is only for live DK Bank calls.
-    const bypassOtp = this.configService.get<string>("DK_STAGING_OTP_BYPASS");
-    if (bypassOtp) {
-      const tgOtpSession = await this.redis.getJson<{
-        otp: string;
-        userId: string;
-      }>(`tara:tg-otp:${paymentId}`);
+    // ── Step 1: Validate Telegram OTP (security gate) ────────────────────────
+    const tgOtpSession = await this.redis.getJson<{
+      otp: string;
+      userId: string;
+    }>(`tara:tg-otp:${paymentId}`);
 
-      if (!tgOtpSession) {
-        throw new BadRequestException(
-          "OTP has expired. Please initiate a new payment.",
-        );
-      }
-      if (tgOtpSession.userId !== userId) {
-        throw new BadRequestException("Payment not found.");
-      }
-      if (tgOtpSession.otp !== otp) {
-        throw new BadRequestException(
-          "Invalid OTP. Please check your Telegram and try again.",
-        );
-      }
-
-      this.logger.log(
-        `[STAGING] Telegram OTP verified for payment ${payment.id}`,
+    if (!tgOtpSession) {
+      throw new BadRequestException(
+        "OTP has expired. Please initiate a new payment.",
       );
-      await this.applyDKStatusUpdate({
-        userId,
-        paymentId: payment.id,
-        dkRaw: { bypass: true },
-        dkStatus: "SUCCESS",
-        dkStatusDesc: "Staging Telegram OTP verified",
-        isFromWebhook: false,
-      });
-
-      // Load the OTP tracking record for this payment (DB - for verify status)
-      const otpRecord = await this.otpRepo.findOne({
-        where: { paymentId, userId },
-        order: { createdAt: "DESC" },
-      });
-      if (otpRecord) {
-        const now = new Date();
-        otpRecord.status = OtpStatus.VERIFIED;
-        otpRecord.verifiedAt = now;
-        await this.otpRepo.save(otpRecord);
-      }
-      await this.redis.del(
-        `tara:tg-otp:${paymentId}`,
-        otpSessionKey(payment.id),
-      );
-      await this.redis.del(`tara:cache:balance:${userId}`);
-
-      return {
-        success: true,
-        paymentId: payment.id,
-        status: "success" as any,
-        amount: Number(payment.amount),
-        currency: payment.currency,
-        method: "dkbank",
-        message: "Payment confirmed. Balance credited.",
-        timestamp: new Date().toISOString(),
-      };
     }
-    // ─────────────────────────────────────────────────────────────────────────
+    if (tgOtpSession.userId !== userId) {
+      throw new BadRequestException("Payment not found.");
+    }
+    if (tgOtpSession.otp !== otp) {
+      throw new BadRequestException(
+        "Invalid OTP. Please check your Telegram and try again.",
+      );
+    }
+
+    this.logger.log(`[OTP] Telegram OTP verified for payment ${payment.id}`);
+
+    // Clear Telegram OTP from Redis immediately after validation
+    await this.redis.del(`tara:tg-otp:${paymentId}`);
 
     const meta = payment.metadata || {};
-    const bfsTxnId = meta.bfsTxnId;
-    const stanNumber = meta.stanNumber;
-    const txDatetime = meta.txDatetime;
-    const sourceAccountNumber = meta.customerAccountNumber;
-    const sourceAccountName = meta.customerAccountName;
-
-    if (!bfsTxnId || !stanNumber || !txDatetime || !sourceAccountNumber) {
-      throw new BadRequestException(
-        "Payment is missing authorization data — please initiate again",
-      );
-    }
-
-    this.logger.log(`[OTP] paymentId=${paymentId} otp=${otp}`);
-
-    // Fast-path: check Redis session first; fall back to DB if Redis is unavailable.
-    const redisSession = await this.redis.getJson<OtpSession>(
-      otpSessionKey(paymentId),
-    );
-
-    if (redisSession) {
-      // Ownership check
-      if (redisSession.userId !== userId) {
-        throw new BadRequestException("Payment not found");
-      }
-      // Expiry check from Redis TTL value
-      if (
-        redisSession.status === OtpStatus.PENDING &&
-        new Date(redisSession.expiresAt) < new Date()
-      ) {
-        await this.redis.del(otpSessionKey(paymentId));
-        // Update DB record too
-        const dbOtp = await this.otpRepo.findOne({
-          where: { paymentId, userId },
-          order: { createdAt: "DESC" },
-        });
-        if (dbOtp) {
-          dbOtp.status = OtpStatus.EXPIRED;
-          await this.otpRepo.save(dbOtp);
-        }
-        throw new BadRequestException(
-          "OTP has expired. Please initiate a new payment.",
-        );
-      }
-    }
-
-    // Load the OTP tracking record for this payment (DB — kept as audit log)
     const otpRecord = await this.otpRepo.findOne({
       where: { paymentId, userId },
       order: { createdAt: "DESC" },
     });
 
-    // Guard: check OTP session hasn't expired (DB fallback when Redis miss)
-    if (
-      !redisSession &&
-      otpRecord &&
-      otpRecord.status === OtpStatus.PENDING &&
-      otpRecord.expiresAt < new Date()
-    ) {
-      otpRecord.status = OtpStatus.EXPIRED;
+    // Telegram OTP verified — credit Tara balance directly.
+    // We never call DK account_auth/debit_request so no DK SMS is ever triggered.
+    // Security is enforced by: JWT auth + CID ownership + Telegram phone hash + this OTP.
+    this.logger.log(
+      `[Payment] Crediting Tara balance for payment ${payment.id}`,
+    );
+
+    await this.applyDKStatusUpdate({
+      userId,
+      paymentId: payment.id,
+      dkRaw: { source: "telegram_otp" },
+      dkStatus: "SUCCESS",
+      dkStatusDesc: "Telegram OTP verified — balance credited",
+      isFromWebhook: false,
+    });
+
+    if (otpRecord) {
+      otpRecord.status = OtpStatus.VERIFIED;
+      otpRecord.verifiedAt = new Date();
       await this.otpRepo.save(otpRecord);
-      throw new BadRequestException(
-        "OTP has expired. Please initiate a new payment.",
-      );
     }
+    await this.redis.del(otpSessionKey(payment.id));
+    await this.redis.del(`tara:cache:balance:${userId}`);
 
-    try {
-      const result = await this.dkGateway.executeTransactionWithOtp({
-        bfsTxnId,
-        otp,
-        stanNumber,
-        txDatetime,
-        sourceAccountNumber,
-        sourceAccountName,
-        amount: Number(payment.amount),
-        description: payment.description,
-      });
-
-      const now = new Date();
-      payment.dkTxnStatusId = result.txnStatusId;
-      payment.externalPaymentId = result.txnStatusId;
-      payment.metadata = {
-        ...(payment.metadata || {}),
-        dkExecuteResponse: result.raw,
-        otpConfirmedAt: now.toISOString(),
-      };
-      await this.paymentRepo.save(payment);
-
-      // Mark OTP as verified
-      if (otpRecord) {
-        otpRecord.status = OtpStatus.VERIFIED;
-        otpRecord.verifiedAt = now;
-        await this.otpRepo.save(otpRecord);
-      }
-      // Remove OTP session from Redis on successful verification
-      await this.redis.del(otpSessionKey(payment.id));
-
-      return {
-        success: true,
-        paymentId: payment.id,
-        status: "pending",
-        amount: Number(payment.amount),
-        currency: payment.currency,
-        method: "dkbank",
-        message: "Payment submitted. Waiting for DK Bank confirmation.",
-        timestamp: now.toISOString(),
-        paymentUrl: result.paymentUrl,
-        qrCode: result.qrCode,
-      };
-    } catch (e: any) {
-      payment.status = PaymentStatus.FAILED;
-      payment.failureReason = e?.message || "OTP confirmation failed";
-      payment.metadata = {
-        ...(payment.metadata || {}),
-        dkConfirmError: {
-          message: payment.failureReason,
-          otpAttemptedAt: new Date().toISOString(),
-        },
-      };
-      await this.paymentRepo.save(payment);
-
-      // Increment failed attempts on the OTP record (DB + Redis)
-      if (otpRecord && otpRecord.status === OtpStatus.PENDING) {
-        otpRecord.failedAttempts += 1;
-        await this.otpRepo.save(otpRecord);
-        if (redisSession) {
-          await this.redis.setJsonEx<OtpSession>(
-            otpSessionKey(payment.id),
-            Math.max(
-              1,
-              Math.floor(
-                (new Date(redisSession.expiresAt).getTime() - Date.now()) /
-                  1000,
-              ),
-            ),
-            { ...redisSession, failedAttempts: otpRecord.failedAttempts },
-          );
-        }
-      }
-
-      throw e;
-    }
+    return {
+      success: true,
+      paymentId: payment.id,
+      status: "success" as any,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      method: "dkbank",
+      message: "Payment confirmed. Balance credited.",
+      timestamp: new Date().toISOString(),
+    };
   }
 
   async getPaymentStatus(

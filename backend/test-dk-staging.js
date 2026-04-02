@@ -2,11 +2,13 @@
  * DK Staging Connection Test (updated for new API)
  *
  * Usage:
- *   node test-dk-staging.js <account_number>               # balance/auth check only
+ *   node test-dk-staging.js <account_number>               # account inquiry (balance + details)
+ *   node test-dk-staging.js --cid <cid_number>             # CID → account number lookup
  *   node test-dk-staging.js <account_number> --pay <amt>   # auth → prompt for OTP → pay
  *
  * Example:
  *   node test-dk-staging.js 110158212197
+ *   node test-dk-staging.js --cid 11502000922
  *   node test-dk-staging.js 110158212197 --pay 10
  */
 
@@ -30,13 +32,19 @@ const BANK_CODE = "1060";
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
-const accountNo = args[0] && !args[0].startsWith("--") ? args[0] : null;
+const cidIdx = args.indexOf("--cid");
+const cidArg = cidIdx !== -1 ? args[cidIdx + 1] : null;
+const accountNo =
+  !cidArg && args[0] && !args[0].startsWith("--") ? args[0] : null;
 const payIdx = args.indexOf("--pay");
 const payAmount = payIdx !== -1 ? parseFloat(args[payIdx + 1]) : null;
 
-if (!accountNo) {
+if (!accountNo && !cidArg) {
   console.error(
-    "Usage: node test-dk-staging.js <account_number> [--pay <amount>]",
+    "Usage:\n" +
+      "  node test-dk-staging.js <account_number>             # balance inquiry\n" +
+      "  node test-dk-staging.js --cid <cid_number>           # CID → account lookup\n" +
+      "  node test-dk-staging.js <account_number> --pay <amt> # full payment flow",
   );
   process.exit(1);
 }
@@ -198,6 +206,67 @@ async function step_auth() {
   return result;
 }
 
+async function step_clientInquiry(token, privateKey, cid) {
+  console.log(`\n── Step 2: Client Inquiry (CID → Account Number) ──`);
+  const res = await dkPost(
+    "/v1/client_inquiry",
+    { id_type: "CID", id_number: cid },
+    token,
+    privateKey,
+  );
+
+  if (res.response_code !== "0000") {
+    console.error("  Full response:", JSON.stringify(res, null, 4));
+    throw new Error(
+      `[${res.response_code}] ${res.response_description || res.response_message || "client_inquiry failed"}`,
+    );
+  }
+
+  console.log("  Full response:", JSON.stringify(res, null, 4));
+
+  const accounts = res.response_data;
+  if (!accounts || accounts.length === 0) {
+    throw new Error("No accounts found for this CID in staging");
+  }
+
+  ok(`Found ${accounts.length} account(s) for CID ${cid}:`);
+  accounts.forEach((acc, i) => {
+    console.log(`\n     Account ${i + 1}:`);
+    console.log(`       Account Number : ${acc.account_number}`);
+    console.log(`       Account Name   : ${acc.account_name}`);
+    console.log(`       CID            : ${acc.cid_no || cid}`);
+    console.log(`       Phone Hash     : ${acc.phone_hash || "—"}`);
+  });
+
+  return accounts;
+}
+
+async function step_accountInquiry(token, privateKey, accountNumber) {
+  console.log(`\n── Step 2: Account Inquiry (balance + details) ──`);
+  const res = await dkPost(
+    "/v1/account_inquiry",
+    { account_number: accountNumber },
+    token,
+    privateKey,
+  );
+
+  if (res.response_code !== "0000") {
+    console.error("  Full response:", JSON.stringify(res, null, 4));
+    throw new Error(
+      `[${res.response_code}] ${res.response_description || res.response_message || "account_inquiry failed"}`,
+    );
+  }
+
+  const d = res.response_data;
+  ok(`Account found!`);
+  console.log(`     Account Number : ${d?.account_number}`);
+  console.log(`     Account Name   : ${d?.beneficiary_account_name}`);
+  console.log(`     Balance        : ${d?.balance_info}`);
+  console.log(`     Inquiry ID     : ${d?.inquiry_id}`);
+  console.log(`     Response Time  : ${d?.response_time}`);
+  return d;
+}
+
 async function step_accountAuth(
   token,
   privateKey,
@@ -207,7 +276,7 @@ async function step_accountAuth(
   txDatetime,
 ) {
   console.log(
-    `\n── Step 2: Account Auth / Send OTP (account: ${accountNumber}) ──`,
+    `\n── Step 3: Account Auth / Send OTP (account: ${accountNumber}) ──`,
   );
   const res = await dkPost(
     "/v1/account_auth/pull-payment",
@@ -228,13 +297,15 @@ async function step_accountAuth(
   );
 
   if (res.response_code !== "0000") {
+    console.error("  Full response:", JSON.stringify(res, null, 4));
     throw new Error(
-      res.response_description || res.response_message || "account_auth failed",
+      `[${res.response_code}] ${res.response_description || res.response_message || "account_auth failed"}`,
     );
   }
 
   const bfsTxnId = res.response_data?.bfs_txn_id;
   ok(`Authorized! bfs_txn_id: ${bfsTxnId}`);
+  console.log("  Full account_auth response:", JSON.stringify(res, null, 4));
   info(
     "DK Bank should now send an OTP to the account holder's registered phone.",
   );
@@ -307,15 +378,33 @@ async function step_checkStatus(token, privateKey, txnStatusId) {
 
   console.log("═══════════════════════════════════════");
   console.log(" DK Staging Test");
-  console.log(`  Account: ${accountNo}`);
-  console.log(`  Amount:  BTN ${amount}`);
-  console.log(
-    `  Mode:    ${payAmount !== null ? "auth + OTP + pay" : "auth only (no payment)"}`,
-  );
+  if (cidArg) {
+    console.log(`  CID:     ${cidArg}`);
+    console.log(`  Mode:    CID → account number lookup`);
+  } else {
+    console.log(`  Account: ${accountNo}`);
+    console.log(`  Amount:  BTN ${amount}`);
+    console.log(
+      `  Mode:    ${payAmount !== null ? "auth + OTP + pay" : "balance inquiry"}`,
+    );
+  }
   console.log("═══════════════════════════════════════");
 
   try {
     const { token, privateKey } = await step_auth();
+
+    // ── CID lookup mode ──────────────────────────────────────────
+    if (cidArg) {
+      await step_clientInquiry(token, privateKey, cidArg);
+      console.log("\n═══════════════════════════════════════");
+      console.log(" Done ✅");
+      console.log("═══════════════════════════════════════\n");
+      return;
+    }
+
+    // ── Account number mode ──────────────────────────────────────
+    // Always show balance + account details first
+    await step_accountInquiry(token, privateKey, accountNo);
 
     const stanNumber = String(Math.floor(100000 + Math.random() * 900000));
     const txDatetime = dkTs();
