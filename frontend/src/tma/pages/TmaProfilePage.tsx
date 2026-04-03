@@ -135,7 +135,7 @@ export const TmaProfilePage: FC = () => {
   const [linkedName, setLinkedName] = useState("");
 
   const hasDKBank = !!user?.dkCid;
-  const hasPhoneVerified = !!user?.telegramPhoneHash;
+  const hasPhoneVerified = !!user?.isPhoneVerified;
 
   const handleLink = async () => {
     if (cid.length !== 11) {
@@ -266,17 +266,15 @@ export const TmaProfilePage: FC = () => {
                     </span>
                   </p>
                   <p style={styles.linkedRow}>
-                    <span style={styles.label}>Phone hash</span>
+                    <span style={styles.label}>Phone</span>
                     <span style={{ ...styles.value, ...styles.inlineIcon }}>
-                      {user?.dkPhoneHash ? (
+                      {user?.isDkPhoneLinked ? (
                         <>
                           <ShieldCheck size={13} color="#059669" />
-                          {user.dkPhoneHash.slice(0, 8)}…
+                          Registered
                         </>
                       ) : (
-                        <span
-                          style={{ color: "#d97706", ...styles.inlineIcon }}
-                        >
+                        <span style={{ color: "#d97706", ...styles.inlineIcon }}>
                           <AlertCircle size={13} color="#d97706" />
                           No phone on DK Bank record
                         </span>

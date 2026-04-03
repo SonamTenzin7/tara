@@ -109,9 +109,10 @@ export class UsersController {
         "telegramId",
         "dkCid",
         "dkAccountName",
+        "telegramLinkedAt",
+        // hashes loaded only for boolean derivation — never forwarded to client
         "dkPhoneHash",
         "telegramPhoneHash",
-        "telegramLinkedAt",
       ],
     });
 
@@ -129,9 +130,13 @@ export class UsersController {
       await this.redis.setJsonEx(balanceCacheKey, 15, creditsBalance);
     }
 
+    // Derive boolean flags — never send raw hashes to the client
+    const { dkPhoneHash, telegramPhoneHash, ...safeUser } = user as any;
     return {
-      ...user,
+      ...safeUser,
       creditsBalance,
+      isDkPhoneLinked: !!dkPhoneHash,
+      isPhoneVerified: !!(telegramPhoneHash && dkPhoneHash && telegramPhoneHash === dkPhoneHash),
     };
   }
 

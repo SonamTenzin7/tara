@@ -326,7 +326,24 @@ export class AdminController {
   @Get("users")
   @ApiOperation({ summary: "List all users" })
   listUsers() {
-    return this.userRepo.find({ order: { createdAt: "DESC" } });
+    return this.userRepo.find({
+      select: [
+        "id",
+        "firstName",
+        "lastName",
+        "username",
+        "photoUrl",
+        "isAdmin",
+        "telegramId",
+        "dkCid",
+        "dkAccountName",
+        "dkAccountNumber",
+        "telegramLinkedAt",
+        "createdAt",
+        "updatedAt",
+      ],
+      order: { createdAt: "DESC" },
+    });
   }
 
   // ── Payments ───────────────────────────────────────────────────────────────
