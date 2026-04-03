@@ -227,7 +227,6 @@ export class AuthService {
             metadata: {
               cid,
               accountName: account.accountName,
-              phoneNumber: account.phoneNumber,
             },
             user: existingUser,
             userId: callerUserId,
@@ -247,7 +246,8 @@ export class AuthService {
           isAdmin: existingUser.isAdmin,
         });
         const updatedUser = await this.userRepo.findOneBy({ id: callerUserId });
-        return { token, user: updatedUser, dkAccount: account };
+        const { phoneNumber: _p1, ...safeDkAccount1 } = account;
+        return { token, user: updatedUser, dkAccount: safeDkAccount1 };
       }
     }
     // ────────────────────────────────────────────────────────────────────────
@@ -321,7 +321,8 @@ export class AuthService {
           sub: freshUser.id,
           isAdmin: freshUser.isAdmin,
         });
-        return { token, user: freshUser, dkAccount: account };
+        const { phoneNumber: _p2, ...safeDkAccount2 } = account;
+        return { token, user: freshUser, dkAccount: safeDkAccount2 };
       }
 
       // Brand new user — create account linked to DK Bank identity
@@ -390,6 +391,7 @@ export class AuthService {
       isAdmin: freshUser.isAdmin,
     });
 
-    return { token, user: freshUser, dkAccount: account };
+    const { phoneNumber: _p3, ...safeDkAccount3 } = account;
+    return { token, user: freshUser, dkAccount: safeDkAccount3 };
   }
 }

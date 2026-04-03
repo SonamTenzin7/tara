@@ -4,12 +4,12 @@
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-// Store the JWT in memory (survives page navigation, cleared on close)
-let _token: string | null = localStorage.getItem("tara_token");
+// Store the JWT in sessionStorage — survives page navigation, cleared on tab close
+let _token: string | null = sessionStorage.getItem("tara_token");
 
 export function setToken(token: string) {
   _token = token;
-  localStorage.setItem("tara_token", token);
+  sessionStorage.setItem("tara_token", token);
 }
 
 export function getToken(): string | null {
@@ -18,7 +18,7 @@ export function getToken(): string | null {
 
 export function clearToken() {
   _token = null;
-  localStorage.removeItem("tara_token");
+  sessionStorage.removeItem("tara_token");
 }
 
 // Decode a JWT payload without a library — returns null if malformed
@@ -89,9 +89,10 @@ export interface AuthUser {
   // DK Bank linking fields
   dkCid?: string | null;
   dkAccountName?: string | null;
-  dkPhoneHash?: string | null;
-  telegramPhoneHash?: string | null;
   telegramLinkedAt?: string | null;
+  // Boolean flags — hashes are never sent to the client
+  isDkPhoneLinked?: boolean;
+  isPhoneVerified?: boolean;
 }
 
 export interface AuthResponse {
