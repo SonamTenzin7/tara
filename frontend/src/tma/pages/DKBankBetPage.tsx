@@ -1,4 +1,5 @@
 import { FC, useState, useEffect } from "react";
+import dkBankLogo from "../../../assets/dk blue.png";
 import { useParams } from "react-router-dom";
 import { Spinner, Placeholder } from "@telegram-apps/telegram-ui";
 import { Page } from "@/tma/components/Page";
@@ -279,13 +280,23 @@ export const DKBankBetPage: FC = () => {
                 fontWeight: 700,
                 cursor: isReady ? "pointer" : "not-allowed",
                 transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
               }}
             >
-              {isReady
-                ? `Pay ${formatBTN(betAmount)} on ${selectedOutcome?.label}`
-                : selectedOutcomeId
-                  ? `Enter at least Nu. ${minBet}`
-                  : "Pick a side to continue"}
+              {isReady ? (
+                <>
+                  Pay {formatBTN(betAmount)} via
+                  <span style={{ background: "#fff", borderRadius: 4, padding: "1px 5px", display: "inline-flex", alignItems: "center" }}>
+                    <img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto" }} />
+                  </span>
+                  on {selectedOutcome?.label}
+                </>
+              ) : selectedOutcomeId
+                ? `Enter at least Nu. ${minBet}`
+                : "Pick a side to continue"}
             </button>
           </div>
         )}

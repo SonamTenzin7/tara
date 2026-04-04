@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import dkBankLogo from "../../../assets/dk blue.png";
 import {
   initiateDKBankPayment,
   confirmDKBankPayment,
@@ -266,8 +267,11 @@ export function DKBankConfirmModal({
 
             {/* CID — locked if linked */}
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-subtle)", marginBottom: 6 }}>
-                DK Bank CID
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <span style={{ background: "#fff", borderRadius: 5, padding: "2px 6px", display: "inline-flex", alignItems: "center" }}>
+                  <img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto" }} />
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-subtle)" }}>CID</span>
               </div>
               {linkedCid ? (
                 <div style={{

@@ -1,4 +1,5 @@
 import { FC, useEffect, useState } from "react";
+import dkBankLogo from "../../../assets/dk blue.png";
 import { useParams } from "react-router-dom";
 import { Spinner, Placeholder } from "@telegram-apps/telegram-ui";
 import { Page } from "@/tma/components/Page";
@@ -120,8 +121,8 @@ export const MarketDetailPage: FC = () => {
               <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>Payment Method</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
                 <Link to={`/dkbank-bet/${market.id}`} style={{ textDecoration: "none" }}>
-                  <button style={{ width: "100%", padding: "16px 8px", background: "linear-gradient(135deg, #ff8c00, #ff4500)", color: "#fff", border: "none", borderRadius: 12, fontSize: "0.75rem", fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 12px rgba(255,140,0,0.3)" }}>
-                    DK BANK
+                  <button style={{ width: "100%", padding: "12px 8px", background: "#fff", border: "2px solid #ff8c00", borderRadius: 12, cursor: "pointer", boxShadow: "0 4px 12px rgba(255,140,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <img src={dkBankLogo} alt="DK Bank" style={{ height: 18, width: "auto" }} />
                   </button>
                 </Link>
                 <Link to={`/ton-bet/${market.id}`} style={{ textDecoration: "none" }}>

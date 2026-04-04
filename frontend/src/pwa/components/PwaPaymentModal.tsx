@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import dkBankLogo from '../../../assets/dk blue.png';
 import { initiateDKBankPayment, checkDKBankPaymentStatus, formatBTN } from '@/api/dkbank';
 import { loginWithDKBank } from '@/api/client';
 import type { Market } from '@/api/client';
@@ -276,7 +277,9 @@ export function PwaPaymentModal({
             >
               {/* <span style={{ fontSize: 18 }}>🏦</span> */}
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: selectedMethod === 'dkbank' ? '#3b82f6' : 'var(--text-main)' }}>DK Bank</div>
+                <div style={{ background: '#fff', borderRadius: 5, padding: '2px 6px', display: 'inline-flex', alignItems: 'center', marginBottom: 3 }}>
+                  <img src={dkBankLogo} alt="DK Bank" style={{ height: 16, width: 'auto' }} />
+                </div>
                 <div style={{ fontSize: 11, color: selectedMethod === 'dkbank' ? '#60a5fa' : 'var(--text-subtle)' }}>BTN · Nu</div>
               </div>
             </button>
@@ -435,7 +438,12 @@ export function PwaPaymentModal({
             {status === 'processing'
               ? 'Processing…'
               : canPay
-                ? `Pay ${formatBTN(betAmount)} with DK Bank`
+                ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                    Pay {formatBTN(betAmount)} with
+                    <span style={{ background: '#fff', borderRadius: 4, padding: '1px 5px', display: 'inline-flex', alignItems: 'center' }}>
+                      <img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: 'auto' }} />
+                    </span>
+                  </span>
                 : !isValidAmount ? `Min Nu ${MIN_BET}` : 'Enter CID to continue'}
           </button>
         </>)}
