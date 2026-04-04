@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import dkBankLogo from "../../../assets/dk blue.png";
 import {
   initiateDKBankPayment,
   confirmDKBankPayment,
@@ -415,10 +416,10 @@ export function TmaPaymentModal({
                 >
                   Verify OTP
                 </div>
-                <div
-                  style={{ fontSize: 15, fontWeight: 800, color: "var(--text-main)" }}
-                >
-                  DK Bank
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <div style={{ background: "#fff", borderRadius: 6, padding: "3px 8px", display: "inline-flex", alignItems: "center" }}>
+                    <img src={dkBankLogo} alt="DK Bank" style={{ height: 18, width: "auto" }} />
+                  </div>
                 </div>
               </div>
               <button
@@ -668,15 +669,8 @@ export function TmaPaymentModal({
                 }}
               >
                 <div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color:
-                        selectedMethod === "dkbank" ? "#3b82f6" : "var(--text-main)",
-                    }}
-                  >
-                    DK Bank
+                  <div style={{ background: "#fff", borderRadius: 5, padding: "2px 6px", display: "inline-flex", alignItems: "center", marginBottom: 3 }}>
+                    <img src={dkBankLogo} alt="DK Bank" style={{ height: 16, width: "auto" }} />
                   </div>
                   <div
                     style={{
@@ -1043,7 +1037,12 @@ export function TmaPaymentModal({
                 {status === "processing"
                   ? "Processing…"
                   : canPay
-                    ? `Pay ${formatBTN(betAmount)} with DK Bank`
+                    ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                        Pay {formatBTN(betAmount)} with
+                        <span style={{ background: "#fff", borderRadius: 4, padding: "1px 5px", display: "inline-flex", alignItems: "center" }}>
+                          <img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto" }} />
+                        </span>
+                      </span>
                     : !isValidAmount
                       ? `Min Nu ${MIN_BET}`
                       : "Enter CID to continue"}

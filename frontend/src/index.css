@@ -12,6 +12,9 @@
   --text-subtle: #94a3b8;
   --bg-secondary: #f1f5f9;
   --border: #e2e8f0;
+  --balance-card-bg: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  --deposit-btn-bg: linear-gradient(135deg, #60a5fa, #3b82f6);
+  --balance-card-shadow: 0 16px 32px -8px rgba(39,117,208,0.35);
   
   /* Gradients */
   --grad-primary: linear-gradient(135deg, #3ecf6e 0%, #2b7fdb 100%);
@@ -46,6 +49,9 @@ html.dark {
   --text-subtle: #64748b;
   --bg-secondary: #1e2d45;
   --border: #334155;
+  --balance-card-bg: #1a5bb5;
+  --deposit-btn-bg: linear-gradient(135deg, #2775d0, #1a5bb5);
+  --balance-card-shadow: 0 16px 32px -8px rgba(10,30,70,0.5);
   
   /* Gradients */
   --grad-primary: linear-gradient(135deg, #3ecf6e 0%, #2b7fdb 100%);

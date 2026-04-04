@@ -400,9 +400,16 @@ export const TmaFeedPage: FC = () => {
     );
   };
 
-  const filteredOpen = filterByQuery(openMarkets);
+  const filteredOpen = filterByQuery(openMarkets)
+    .sort((a, b) => Number(b.totalPool) - Number(a.totalPool));
   const filteredResolving = filterByQuery(resolvingMarkets);
   const filteredUpcoming = filterByQuery(upcomingMarkets);
+
+  const HOT_THRESHOLD = 1000;
+  const trendingMarkets = openMarkets
+    .filter((m) => Number(m.totalPool) >= HOT_THRESHOLD)
+    .sort((a, b) => Number(b.totalPool) - Number(a.totalPool))
+    .slice(0, 5);
   const hasResults =
     filteredOpen.length + filteredResolving.length + filteredUpcoming.length >
     0;
@@ -483,6 +490,54 @@ export const TmaFeedPage: FC = () => {
             </button>
           )}
         </div>
+
+        {/* ── Trending strip ── */}
+        {trendingMarkets.length > 0 && !searchQuery.trim() && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="#ef4444" stroke="none">
+                <path d="M12 2c0 6-6 8-6 14a6 6 0 0 0 12 0c0-6-6-8-6-14z"/>
+              </svg>
+              Trending
+            </div>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+              {trendingMarkets.map((m) => {
+                const top = m.outcomes.reduce((a, b) =>
+                  Number(b.totalBetAmount) > Number(a.totalBetAmount) ? b : a,
+                  m.outcomes[0],
+                );
+                const topPct = Number(m.totalPool) > 0
+                  ? Math.round((Number(top.totalBetAmount) / Number(m.totalPool)) * 100)
+                  : 0;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setActiveBet({ marketId: m.id, outcomeId: top.id })}
+                    style={{
+                      flexShrink: 0,
+                      width: 140,
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--glass-border)",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      boxShadow: "var(--shadow-sm)",
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-main)", lineHeight: 1.3, marginBottom: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {m.title}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#22c55e" }}>{top.label} {topPct}%</span>
+                      <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 600 }}>Nu {Number(m.totalPool).toLocaleString()}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* No results */}
         {!hasResults && searchQuery.trim() && (

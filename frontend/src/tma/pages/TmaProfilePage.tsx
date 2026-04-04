@@ -1,4 +1,5 @@
-import { FC, useState, useEffect } from "react";
+import { FC, useState, useEffect, ReactNode } from "react";
+import dkBankLogo from "../../../assets/dk blue.png";
 import { useAuth } from "@/tma/hooks/useAuth";
 import {
   linkDKBank,
@@ -227,7 +228,7 @@ export const TmaProfilePage: FC = () => {
             {/* ── Status badges ──────────────────────────────────── */}
             <div style={styles.badgeRow}>
               <StatusBadge
-                label="DK Bank"
+                label={<img src={dkBankLogo} alt="DK Bank" style={{ height: 13, width: "auto", mixBlendMode: "multiply" }} />}
                 active={hasDKBank}
                 activeText={user?.dkAccountName || user?.dkCid || "Linked"}
                 inactiveText="Not linked"
@@ -311,7 +312,18 @@ export const TmaProfilePage: FC = () => {
                   ) : (
                     <Link2 size={16} color="#2775d0" />
                   )}
-                  {hasDKBank ? "DK Bank Linked" : "Link DK Bank Account"}
+                  {hasDKBank ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ background: "#fff", borderRadius: 4, padding: "1px 5px", display: "inline-flex", alignItems: "center" }}><img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto" }} /></span>
+                      Linked
+                    </span>
+                  ) : (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      Link
+                      <img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto", mixBlendMode: "multiply" }} />
+                      Account
+                    </span>
+                  )}
                 </span>
               </h3>
 
@@ -373,7 +385,10 @@ export const TmaProfilePage: FC = () => {
                   {step === "success" && (
                     <p style={{ ...styles.success, ...styles.inlineIcon }}>
                       <CheckCircle2 size={14} color="#059669" />
-                      DK Bank account linked
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <img src={dkBankLogo} alt="DK Bank" style={{ height: 13, width: "auto", mixBlendMode: "multiply" }} />
+                        account linked
+                      </span>
                       {linkedName ? ` as ${linkedName}` : ""}!
                     </p>
                   )}
@@ -398,7 +413,11 @@ export const TmaProfilePage: FC = () => {
                       ) : (
                         <>
                           <Link2 size={15} />
-                          Link DK Bank Account
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            Link
+                            <img src={dkBankLogo} alt="DK Bank" style={{ height: 13, width: "auto", mixBlendMode: "multiply" }} />
+                            Account
+                          </span>
                         </>
                       )}
                     </span>
@@ -607,7 +626,7 @@ function StatusBadge({
   activeText,
   inactiveText,
 }: {
-  label: string;
+  label: ReactNode;
   active: boolean;
   activeText: string;
   inactiveText: string;
@@ -900,13 +919,13 @@ const styles: Record<string, React.CSSProperties> = {
 
 const walletStyles: Record<string, React.CSSProperties> = {
   balanceCard: {
-    background: " #1a5bb5",
+    background: "var(--balance-card-bg)",
     borderRadius: 20,
     padding: "28px 20px",
     color: "#fff",
     position: "relative",
     overflow: "hidden",
-    boxShadow: "0 16px 32px -8px rgba(39,117,208,0.35)",
+    boxShadow: "var(--balance-card-shadow)",
   },
   balanceLabel: {
     fontSize: "0.8rem",
@@ -975,7 +994,7 @@ const walletStyles: Record<string, React.CSSProperties> = {
     padding: "13px",
     borderRadius: 12,
     border: "none",
-    background: "linear-gradient(135deg, #2775d0, #1a5bb5)",
+    background: "var(--deposit-btn-bg)",
     color: "#fff",
     fontWeight: 600,
     fontSize: "0.9rem",
