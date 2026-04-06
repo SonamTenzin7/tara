@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Settlement } from "../entities/settlement.entity";
 import { Dispute } from "../entities/dispute.entity";
-import { Bet } from "../entities/bet.entity";
+import { Position } from "../entities/position.entity";
 import { User } from "../entities/user.entity";
 import { Payment } from "../entities/payment.entity";
 import { AuditLog } from "../entities/audit-log.entity";
@@ -17,7 +17,7 @@ import { TelegramModule } from "../telegram/telegram.module";
     TypeOrmModule.forFeature([
       Settlement,
       Dispute,
-      Bet,
+      Position,
       User,
       Payment,
       AuditLog,

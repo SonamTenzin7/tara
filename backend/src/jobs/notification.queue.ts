@@ -21,7 +21,7 @@ export interface MarketSettledJobData {
 
 export interface BetResultJobData {
   userId: string;
-  betId: string;
+  positionId: string;
   marketTitle: string;
   outcomeLabel: string;
   status: "WON" | "LOST" | "REFUNDED";

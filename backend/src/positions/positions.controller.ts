@@ -3,19 +3,19 @@ import { ApiBearerAuth, ApiTags, ApiOperation } from "@nestjs/swagger";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { JwtAuthGuard } from "../auth/guards";
-import { Bet } from "../entities/bet.entity";
+import { Position } from "../entities/position.entity";
 
-@ApiTags("bets")
+@ApiTags("positions")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller("bets")
-export class BetsController {
-  constructor(@InjectRepository(Bet) private betRepo: Repository<Bet>) {}
+export class PositionsController {
+  constructor(@InjectRepository(Position) private positionRepo: Repository<Position>) {}
 
   @Get("my")
-  @ApiOperation({ summary: "Get my betting history" })
-  myBets(@Request() req: any) {
-    return this.betRepo.find({
+  @ApiOperation({ summary: "Get my position history" })
+  myPositions(@Request() req: any) {
+    return this.positionRepo.find({
       where: { userId: req.user.userId },
       relations: ["market", "outcome"],
       order: { placedAt: "DESC" },

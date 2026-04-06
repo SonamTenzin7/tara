@@ -8,7 +8,7 @@ import {
   Index,
 } from "typeorm";
 import { AuthMethod } from "./auth-method.entity";
-import { Bet } from "./bet.entity";
+import { Position } from "./position.entity";
 import { Payment } from "./payment.entity";
 import { Transaction } from "./transaction.entity";
 
@@ -112,8 +112,8 @@ export class User {
   @OneToMany(() => AuthMethod, (am) => am.user)
   authMethods: AuthMethod[];
 
-  @OneToMany(() => Bet, (b) => b.user)
-  bets: Bet[];
+  @OneToMany(() => Position, (p) => p.user)
+  positions: Position[];
 
   @OneToMany(() => Payment, (p) => p.user)
   payments: Payment[];

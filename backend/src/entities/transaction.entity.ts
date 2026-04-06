@@ -12,12 +12,16 @@ import { User } from "./user.entity";
 export enum TransactionType {
   DEPOSIT = "deposit",
   WITHDRAWAL = "withdrawal",
-  BET_PLACED = "bet_placed",
-  BET_PAYOUT = "bet_payout",
+  POSITION_OPENED = "bet_placed",
+  POSITION_PAYOUT = "bet_payout",
   REFUND = "refund",
   DISPUTE_BOND = "dispute_bond",
   DISPUTE_REFUND = "dispute_refund",
 }
+
+// Back-compat aliases
+export const BET_PLACED = TransactionType.POSITION_OPENED;
+export const BET_PAYOUT = TransactionType.POSITION_PAYOUT;
 
 @Entity("transactions")
 export class Transaction {
@@ -42,7 +46,7 @@ export class Transaction {
 
   @Index()
   @Column({ type: "uuid", nullable: true })
-  betId: string;
+  positionId: string;
 
   @Column({ type: "varchar", nullable: true })
   note: string;

@@ -26,11 +26,11 @@ export const routes: Route[] = [
   { path: "/", Component: TmaFeedPage },
   { path: "/markets", Component: MarketsPage },
   { path: "/market/:id", Component: MarketDetailPage },
-  { path: "/ton-bet/:id", Component: TONBetPage, title: "Bet with TON" },
+  { path: "/ton-bet/:id", Component: TONBetPage, title: "Trade with TON" },
   {
     path: "/dkbank-bet/:id",
     Component: DKBankBetPage,
-    title: "Bet with DK Bank",
+    title: "Trade with DK Bank",
   },
   { path: "/dev", Component: IndexPage, title: "Dev Tools" },
   { path: "/init-data", Component: InitDataPage, title: "Init Data" },
@@ -70,7 +70,7 @@ export const routes: Route[] = [
         <PwaMyBetsPage />
       </TmaPageWrapper>
     ),
-    title: "My Bets",
+    title: "My Positions",
   },
   {
     path: "/results",

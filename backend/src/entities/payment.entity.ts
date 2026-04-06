@@ -12,8 +12,8 @@ import { User } from "./user.entity";
 export enum PaymentType {
   DEPOSIT = "deposit",
   WITHDRAWAL = "withdrawal",
-  BET_PLACED = "bet_placed",
-  BET_PAYOUT = "bet_payout",
+  POSITION_PLACED = "position_placed",
+  POSITION_PAYOUT = "position_payout",
   REFUND = "refund",
 }
 

@@ -7,7 +7,7 @@ import {
   OneToMany,
 } from "typeorm";
 import { Market } from "./market.entity";
-import { Bet } from "./bet.entity";
+import { Position } from "./position.entity";
 
 @Entity("outcomes")
 export class Outcome {
@@ -38,6 +38,6 @@ export class Outcome {
   @Column()
   marketId: string;
 
-  @OneToMany(() => Bet, (b) => b.outcome)
-  bets: Bet[];
+  @OneToMany(() => Position, (p) => p.outcome)
+  positions: Position[];
 }

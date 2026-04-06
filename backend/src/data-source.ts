@@ -4,7 +4,7 @@ import { User } from "./entities/user.entity";
 import { AuthMethod } from "./entities/auth-method.entity";
 import { Market } from "./entities/market.entity";
 import { Outcome } from "./entities/outcome.entity";
-import { Bet } from "./entities/bet.entity";
+import { Position } from "./entities/position.entity";
 import { Payment } from "./entities/payment.entity";
 import { Transaction } from "./entities/transaction.entity";
 import { Settlement } from "./entities/settlement.entity";
@@ -32,7 +32,7 @@ export const AppDataSource = new DataSource({
     AuthMethod,
     Market,
     Outcome,
-    Bet,
+    Position,
     Payment,
     Transaction,
     Settlement,

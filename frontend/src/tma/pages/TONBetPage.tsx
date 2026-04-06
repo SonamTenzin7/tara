@@ -72,7 +72,7 @@ export const TONBetPage: FC = () => {
         ],
       });
 
-      // Register bet
+      // Register prediction
       await placeBetWithWallet(market.id, {
         outcomeId: selectedOutcomeId,
         amount: tonAmount,
@@ -80,7 +80,7 @@ export const TONBetPage: FC = () => {
         txHash: tx.boc,
       });
 
-      alert("✅ Bet placed successfully!");
+      alert("✅ Position opened successfully!");
 
       const updated = await getMarket(market.id);
       setMarket(updated);
@@ -213,7 +213,7 @@ export const TONBetPage: FC = () => {
 
         {/* Bet form */}
         {canBet && wallet && (
-          <Section header="Place Your Bet">
+          <Section header="Enter Your Position">
             <div style={{ padding: "1rem" }}>
               <Input
                 header="Amount in TON"
@@ -253,12 +253,12 @@ export const TONBetPage: FC = () => {
           <Section>
             <Placeholder
               header={
-                market.status === "upcoming" ? "Not Open Yet" : "Betting Closed"
+                market.status === "upcoming" ? "Not Open Yet" : "Market Closed"
               }
               description={
                 market.status === "upcoming"
                   ? "This market will open soon"
-                  : "Betting is no longer available"
+                  : "This market is no longer accepting positions"
               }
             />
           </Section>

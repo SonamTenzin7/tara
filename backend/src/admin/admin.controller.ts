@@ -31,7 +31,7 @@ import { Market, MarketStatus } from "../entities/market.entity";
 import { Outcome } from "../entities/outcome.entity";
 import { Settlement } from "../entities/settlement.entity";
 import { Dispute } from "../entities/dispute.entity";
-import { Bet } from "../entities/bet.entity";
+import { Position } from "../entities/position.entity";
 import { User } from "../entities/user.entity";
 import { Payment } from "../entities/payment.entity";
 import { TransitionDto } from "./dto/transition.dto";
@@ -53,7 +53,7 @@ export class AdminController {
     @InjectRepository(Settlement)
     private settlementRepo: Repository<Settlement>,
     @InjectRepository(Dispute) private disputeRepo: Repository<Dispute>,
-    @InjectRepository(Bet) private betRepo: Repository<Bet>,
+    @InjectRepository(Position) private betRepo: Repository<Position>,
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
   ) {}
@@ -184,7 +184,7 @@ export class AdminController {
     const winningOutcome = before.outcomes?.find(
       (o) => o.id === dto.winningOutcomeId,
     );
-    const totalBets =
+    const totalPositions =
       before.outcomes?.reduce((s, o) => s + Number(o.totalBetAmount), 0) ?? 0;
     await this.auditService.log({
       adminId: req.user.userId,
@@ -197,7 +197,7 @@ export class AdminController {
         title: before.title,
         winningOutcomeLabel: winningOutcome?.label,
         totalPool: before.totalPool,
-        totalBets,
+        totalPositions,
       },
       ipAddress: req.ip,
     });
@@ -225,7 +225,7 @@ export class AdminController {
 
   @Post("markets/:id/cancel")
   @HttpCode(200)
-  @ApiOperation({ summary: "Cancel market & refund all bets" })
+  @ApiOperation({ summary: "Cancel market & refund all positions" })
   async cancelMarket(@Param("id") id: string, @Request() req: any) {
     const before = await this.marketsService.findOne(id);
     const result = await this.marketsService.cancel(id);

@@ -20,7 +20,7 @@ import { Dispute } from "../entities/dispute.entity";
 import { JwtAuthGuard, Public, AdminGuard } from "../auth/guards";
 import {
   MarketsService,
-  PlaceBetDto,
+  OpenPositionDto,
   UpdateMarketDto,
   SubmitDisputeDto,
 } from "./markets.service";
@@ -62,7 +62,7 @@ export class MarketsController {
 
   @Post(":id/bets")
   @ApiOperation({ summary: "Place a bet on a market outcome" })
-  placeBet(@Param("id") id: string, @Body() dto: PlaceBetDto, @Request() req: any) {
+  placeBet(@Param("id") id: string, @Body() dto: OpenPositionDto, @Request() req: any) {
     return this.marketsService.placeBet(req.user.userId, id, dto);
   }
 

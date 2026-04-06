@@ -8,7 +8,7 @@ import {
   Index,
 } from "typeorm";
 import { Outcome } from "./outcome.entity";
-import { Bet } from "./bet.entity";
+import { Position } from "./position.entity";
 
 export enum MarketStatus {
   UPCOMING = "upcoming",
@@ -101,6 +101,6 @@ export class Market {
   @OneToMany(() => Outcome, (o) => o.market, { cascade: true, eager: true })
   outcomes: Outcome[];
 
-  @OneToMany(() => Bet, (b) => b.market)
-  bets: Bet[];
+  @OneToMany(() => Position, (p) => p.market)
+  positions: Position[];
 }

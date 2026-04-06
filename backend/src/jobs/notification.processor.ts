@@ -36,7 +36,7 @@ export class NotificationProcessor extends WorkerHost {
       case JobName.BET_RESULT: {
         const data = job.data as BetResultJobData;
         this.logger.log(
-          `[bet.result] user=${data.userId} bet=${data.betId} status=${data.status} payout=${data.payout ?? 0}`,
+          `[position.result] user=${data.userId} position=${data.positionId} status=${data.status} payout=${data.payout ?? 0}`,
         );
         // TODO: send individual win/loss DM via TelegramSimpleService
         break;

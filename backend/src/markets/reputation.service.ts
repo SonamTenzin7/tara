@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { User } from "../entities/user.entity";
-import { Bet, BetStatus } from "../entities/bet.entity";
+import { Position, PositionStatus } from "../entities/position.entity";
 import { Market } from "../entities/market.entity";
 
 /**
@@ -35,7 +35,7 @@ export class ReputationService {
 
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
-    @InjectRepository(Bet)  private readonly betRepo:  Repository<Bet>,
+    @InjectRepository(Position) private readonly betRepo: Repository<Position>,
     @InjectRepository(Market) private readonly marketRepo: Repository<Market>,
   ) {}
 
@@ -50,8 +50,8 @@ export class ReputationService {
     // Fetch all resolved bets for this market (won or lost only — skip refunded)
     const bets = await this.betRepo.find({
       where: [
-        { marketId, status: BetStatus.WON },
-        { marketId, status: BetStatus.LOST },
+        { marketId, status: PositionStatus.WON },
+        { marketId, status: PositionStatus.LOST },
       ],
     });
 
@@ -73,36 +73,43 @@ export class ReputationService {
    * Recalculates the full reputation score for a single user across all
    * their resolved predictions.
    */
-  async recalculateForUser(userId: string, _triggeredByCategory?: string): Promise<void> {
+  async recalculateForUser(
+    userId: string,
+    _triggeredByCategory?: string,
+  ): Promise<void> {
     const user = await this.userRepo.findOneBy({ id: userId });
     if (!user) return;
 
     // Fetch ALL resolved bets for this user across all markets
-    const allBets = await this.betRepo
+    const allPositions = await this.betRepo
       .createQueryBuilder("b")
       .leftJoinAndSelect("b.market", "m")
       .where("b.userId = :userId", { userId })
       .andWhere("b.status IN (:...statuses)", {
-        statuses: [BetStatus.WON, BetStatus.LOST],
+        statuses: [PositionStatus.WON, PositionStatus.LOST],
       })
       .getMany();
 
-    const totalPredictions  = allBets.length;
-    const correctPredictions = allBets.filter((b) => b.status === BetStatus.WON).length;
+    const totalPredictions = allPositions.length;
+    const correctPredictions = allPositions.filter(
+      (b) => b.status === PositionStatus.WON,
+    ).length;
 
     // ── Per-category breakdown ───────────────────────────────────────────────
-    const categoryScores: Record<string, { correct: number; total: number }> = {};
-    for (const bet of allBets) {
+    const categoryScores: Record<string, { correct: number; total: number }> =
+      {};
+    for (const bet of allPositions) {
       const cat = (bet.market as any)?.category ?? "other";
       if (!categoryScores[cat]) categoryScores[cat] = { correct: 0, total: 0 };
       categoryScores[cat].total += 1;
-      if (bet.status === BetStatus.WON) categoryScores[cat].correct += 1;
+      if (bet.status === PositionStatus.WON) categoryScores[cat].correct += 1;
     }
 
     // ── Confidence-adjusted overall score ────────────────────────────────────
-    const reputationScore = totalPredictions === 0
-      ? null
-      : this.adjustedScore(correctPredictions, totalPredictions);
+    const reputationScore =
+      totalPredictions === 0
+        ? null
+        : this.adjustedScore(correctPredictions, totalPredictions);
 
     // ── Tier ─────────────────────────────────────────────────────────────────
     const reputationTier = this.calcTier(totalPredictions, correctPredictions);
@@ -112,12 +119,13 @@ export class ReputationService {
       correctPredictions,
       reputationScore,
       reputationTier,
-      categoryScores: Object.keys(categoryScores).length > 0 ? categoryScores : null,
+      categoryScores:
+        Object.keys(categoryScores).length > 0 ? categoryScores : null,
     });
 
     this.logger.debug(
       `[Reputation] user=${userId} total=${totalPredictions} correct=${correctPredictions} ` +
-      `score=${reputationScore?.toFixed(4) ?? "null"} tier=${reputationTier}`,
+        `score=${reputationScore?.toFixed(4) ?? "null"} tier=${reputationTier}`,
     );
   }
 
@@ -129,7 +137,7 @@ export class ReputationService {
    */
   adjustedScore(correct: number, total: number): number {
     if (total === 0) return 0.5;
-    const raw        = correct / total;
+    const raw = correct / total;
     const confidence = Math.min(total / this.CONFIDENCE_THRESHOLD, 1.0);
     return parseFloat((raw * confidence + 0.5 * (1 - confidence)).toFixed(4));
   }
@@ -143,10 +151,10 @@ export class ReputationService {
    *   expert    100+ predictions AND accuracy >= 75%
    */
   calcTier(total: number, correct: number): string {
-    if (total < 10)  return "newcomer";
+    if (total < 10) return "newcomer";
     const accuracy = correct / total;
     if (total >= 100 && accuracy >= 0.75) return "expert";
-    if (total >= 50  && accuracy >= 0.65) return "reliable";
+    if (total >= 50 && accuracy >= 0.65) return "reliable";
     return "regular";
   }
 
@@ -178,22 +186,26 @@ export class ReputationService {
       .addSelect("b.userId", "userId")
       .where("b.marketId = :marketId", { marketId })
       .andWhere("b.status IN (:...statuses)", {
-        statuses: [BetStatus.PENDING, BetStatus.WON, BetStatus.LOST],
+        statuses: [PositionStatus.PENDING, PositionStatus.WON, PositionStatus.LOST],
       })
       .getRawMany();
 
     // Need at least 3 unique bettors for a meaningful signal
-    const uniqueBettors = new Set(rows.map((r) => r.userId)).size;
-    if (uniqueBettors < 3) return {};
+    const uniquePositiontors = new Set(rows.map((r) => r.userId)).size;
+    if (uniquePositiontors < 3) return {};
 
     // Deduplicate: one vote per user per outcome (last bet wins if multiple exist)
-    const userOutcomeMap: Record<string, { outcomeId: string; weight: number }> = {};
+    const userOutcomeMap: Record<
+      string,
+      { outcomeId: string; weight: number }
+    > = {};
     for (const row of rows) {
       let weight = Number(row.reputationScore ?? 0.5);
       if (category && row.categoryScores) {
-        const catScores = typeof row.categoryScores === "string"
-          ? JSON.parse(row.categoryScores)
-          : row.categoryScores;
+        const catScores =
+          typeof row.categoryScores === "string"
+            ? JSON.parse(row.categoryScores)
+            : row.categoryScores;
         const cat = catScores?.[category];
         if (cat && cat.total >= 5) {
           weight = this.adjustedScore(cat.correct, cat.total);

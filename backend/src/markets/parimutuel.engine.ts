@@ -4,7 +4,7 @@ import { Repository, DataSource } from "typeorm";
 import { RedisService } from "../redis/redis.service";
 import { Market, MarketStatus } from "../entities/market.entity";
 import { Outcome } from "../entities/outcome.entity";
-import { Bet, BetStatus } from "../entities/bet.entity";
+import { Position, PositionStatus } from "../entities/position.entity";
 import { Payment } from "../entities/payment.entity";
 import { Transaction, TransactionType } from "../entities/transaction.entity";
 import { Settlement } from "../entities/settlement.entity";
@@ -36,7 +36,7 @@ export class ParimutuelEngine implements OnModuleInit {
   constructor(
     @InjectRepository(Market) private marketRepo: Repository<Market>,
     @InjectRepository(Outcome) private outcomeRepo: Repository<Outcome>,
-    @InjectRepository(Bet) private betRepo: Repository<Bet>,
+    @InjectRepository(Position) private betRepo: Repository<Position>,
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
     @InjectRepository(Transaction) private transactionRepo: Repository<Transaction>,
     @InjectRepository(Settlement)
@@ -69,14 +69,14 @@ export class ParimutuelEngine implements OnModuleInit {
   }
 
   // ── Accept a bet ──────────────────────────────────────────────────────────
-  async placeBet(
+  async placePosition(
     userId: string,
     marketId: string,
     outcomeId: string,
     amount: number,
-  ): Promise<Bet> {
+  ): Promise<Position> {
     if (amount <= 0)
-      throw new BadRequestException("Bet amount must be positive");
+      throw new BadRequestException("Position amount must be positive");
 
     // Acquire a distributed Redis lock so concurrent bets on the same market
     // are serialised at the application layer before touching the DB.
@@ -119,7 +119,7 @@ export class ParimutuelEngine implements OnModuleInit {
         const user = await em.findOne(User, { where: { id: userId } });
         if (!user) throw new BadRequestException("User not found");
         const balanceBefore = await this.getCreditsBalance(em, userId);
-        this.logger.log(`[placeBet] user=${userId} credits=${balanceBefore} betAmount=${amount}`);
+        this.logger.log(`[placePosition] user=${userId} credits=${balanceBefore} betAmount=${amount}`);
         if (balanceBefore < amount)
           throw new BadRequestException("Insufficient balance");
 
@@ -154,27 +154,27 @@ export class ParimutuelEngine implements OnModuleInit {
         await em.save(Market, market);
 
         // Create bet record
-        const bet = em.create(Bet, {
+        const bet = em.create(Position, {
           userId,
           marketId,
           outcomeId,
           amount,
-          status: BetStatus.PENDING,
+          status: PositionStatus.PENDING,
           oddsAtPlacement: outcome.currentOdds,
         });
-        const savedBet = await em.save(Bet, bet);
+        const savedPosition = await em.save(Position, bet);
 
         await em.save(Transaction, em.create(Transaction, {
-          type: TransactionType.BET_PLACED,
+          type: TransactionType.POSITION_OPENED,
           amount: -amount,
           balanceBefore,
           balanceAfter: balanceBefore - amount,
-          betId: savedBet.id,
+          positionId: savedPosition.id,
           userId,
-          note: `Bet on outcome: ${outcome.label}`,
+          note: `Position on outcome: ${outcome.label}`,
         }));
 
-        return savedBet;
+        return savedPosition;
       });
     } finally {
       if (lockToken) await this.redis.releaseLock(`market:${marketId}`, lockToken);
@@ -291,10 +291,10 @@ export class ParimutuelEngine implements OnModuleInit {
       const payoutPool = totalPool - houseAmount;
 
       const winnerPool = Number(winner.totalBetAmount);
-      const bets = await em.find(Bet, { where: { marketId: market.id } });
+      const bets = await em.find(Position, { where: { marketId: market.id } });
 
       let totalPaidOut = 0;
-      let winningBets = 0;
+      let winningPositions = 0;
 
       for (const bet of bets) {
         if (bet.outcomeId === winner.id) {
@@ -302,37 +302,37 @@ export class ParimutuelEngine implements OnModuleInit {
           const share = winnerPool > 0 ? Number(bet.amount) / winnerPool : 0;
           const payout = parseFloat((payoutPool * share).toFixed(2));
           bet.payout = payout;
-          bet.status = BetStatus.WON;
+          bet.status = PositionStatus.WON;
           totalPaidOut += payout;
-          winningBets++;
+          winningPositions++;
 
           const balanceBefore = await this.getCreditsBalance(em, bet.userId);
           await em.save(Transaction, em.create(Transaction, {
-            type: TransactionType.BET_PAYOUT,
+            type: TransactionType.POSITION_PAYOUT,
             amount: payout,
             balanceBefore,
             balanceAfter: balanceBefore + payout,
-            betId: bet.id,
+            positionId: bet.id,
             userId: bet.userId,
             note: `Payout for winning bet on: ${winner.label}`,
           }));
         } else if (market.status === MarketStatus.CANCELLED) {
           // Refund on cancellation via ledger entry
-          bet.status = BetStatus.REFUNDED;
+          bet.status = PositionStatus.REFUNDED;
           const balanceBefore = await this.getCreditsBalance(em, bet.userId);
           await em.save(Transaction, em.create(Transaction, {
             type: TransactionType.REFUND,
             amount: Number(bet.amount),
             balanceBefore,
             balanceAfter: balanceBefore + Number(bet.amount),
-            betId: bet.id,
+            positionId: bet.id,
             userId: bet.userId,
             note: 'Market cancelled — refund',
           }));
         } else {
-          bet.status = BetStatus.LOST;
+          bet.status = PositionStatus.LOST;
         }
-        await em.save(Bet, bet);
+        await em.save(Position, bet);
       }
 
       market.status = MarketStatus.SETTLED;
@@ -341,8 +341,8 @@ export class ParimutuelEngine implements OnModuleInit {
       const settlement = em.create(Settlement, {
         marketId: market.id,
         winningOutcomeId: winner.id,
-        totalBets: bets.length,
-        winningBets,
+        totalPositions: bets.length,
+        winningPositions,
         totalPool,
         houseAmount,
         payoutPool,
@@ -364,21 +364,21 @@ export class ParimutuelEngine implements OnModuleInit {
       market.status = MarketStatus.CANCELLED;
       await em.save(Market, market);
 
-      const bets = await em.find(Bet, { where: { marketId } });
+      const bets = await em.find(Position, { where: { marketId } });
       for (const bet of bets) {
-        if (bet.status === BetStatus.PENDING) {
+        if (bet.status === PositionStatus.PENDING) {
           const balanceBefore = await this.getCreditsBalance(em, bet.userId);
           await em.save(Transaction, em.create(Transaction, {
             type: TransactionType.REFUND,
             amount: Number(bet.amount),
             balanceBefore,
             balanceAfter: balanceBefore + Number(bet.amount),
-            betId: bet.id,
+            positionId: bet.id,
             userId: bet.userId,
             note: 'Market cancelled — refund',
           }));
-          bet.status = BetStatus.REFUNDED;
-          await em.save(Bet, bet);
+          bet.status = PositionStatus.REFUNDED;
+          await em.save(Position, bet);
         }
       }
     });

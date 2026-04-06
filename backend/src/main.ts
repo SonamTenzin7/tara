@@ -50,7 +50,7 @@ async function bootstrap() {
   // Swagger docs
   const config = new DocumentBuilder()
     .setTitle("Tara Parimutuel API")
-    .setDescription("Parimutuel betting engine for Telegram Mini App")
+    .setDescription("Parimutuel prediction engine for Telegram Mini App")
     .setVersion("1.0")
     .addBearerAuth()
     .build();

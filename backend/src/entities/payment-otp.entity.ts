@@ -91,8 +91,8 @@ export class PaymentOtp {
   user: User;
 
   /**
-   * Market context — set when the payment is for placing a bet
-   * or topping up credits to bet on a specific market.
+   * Market context — set when the payment is for placing a position
+   * or topping up credits to position on a specific market.
    */
   @Index()
   @Column({ type: "uuid", nullable: true })

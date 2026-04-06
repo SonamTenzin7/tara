@@ -214,7 +214,7 @@ export function PwaMarketDetailPage() {
                       }} />
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "var(--text-subtle)", marginTop: "4px", fontWeight: 600 }}>
-                      Nu {Number(outcome.totalBetAmount).toLocaleString()} placed
+                      Nu {Number(outcome.totalBetAmount).toLocaleString()} committed
                     </div>
                   </div>
                 );
@@ -349,7 +349,7 @@ export function PwaMarketDetailPage() {
             >
                <div style={{ fontSize: "3rem", marginBottom: "20px" }}>🔒</div>
               <div style={{ fontWeight: 900, color: "var(--text-muted)", fontSize: "1.2rem", marginBottom: "8px" }}>
-                Betting Closed
+                Market Closed
               </div>
               <p style={{ color: "var(--text-subtle)", fontSize: "0.9rem" }}>
                 This market is currently being resolved or has finished.

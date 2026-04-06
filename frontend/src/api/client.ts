@@ -259,7 +259,7 @@ export interface Transaction {
   balanceBefore: number;
   balanceAfter: number;
   note: string | null;
-  betId: string | null;
+  positionId: string | null;
   paymentId: string | null;
   createdAt: string;
 }

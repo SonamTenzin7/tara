@@ -188,7 +188,7 @@ export function PwaPaymentModal({
               </svg>
             </div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', marginBottom: 6, animation: 'fadeSlideIn 0.35s ease 0.3s both' }}>
-              Bet Placed!
+              Position Opened!
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', animation: 'fadeSlideIn 0.35s ease 0.45s both' }}>
               Your payment was confirmed

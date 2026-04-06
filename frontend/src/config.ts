@@ -8,7 +8,7 @@ const config = {
   // APP INFO
   // ----------------------------------------------------------
   appName: "Tara",
-  appDescription: "Bhutanese Archery Prediction Markets - Bet with BTN or TON",
+  appDescription: "Bhutanese Archery Prediction Markets - Trade event contracts with BTN or TON",
   version: "1.0.0-phase1",
 
   // ----------------------------------------------------------

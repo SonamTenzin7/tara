@@ -8,7 +8,7 @@ import { Repository, DataSource } from "typeorm";
 import { RedisService } from "../redis/redis.service";
 import { CreateMarketDto } from "./dto/create-market.dto";
 import { UpdateMarketDto } from "./dto/update-market.dto";
-import { PlaceBetDto } from "./dto/place-bet.dto";
+import { OpenPositionDto } from "./dto/open-position.dto";
 import { SubmitDisputeDto } from "./dto/submit-dispute.dto";
 import {
   Market,
@@ -29,7 +29,7 @@ import { LMSRService } from "./lmsr.service";
 import { ReputationService } from "./reputation.service";
 export { CreateMarketDto } from "./dto/create-market.dto";
 export { UpdateMarketDto } from "./dto/update-market.dto";
-export { PlaceBetDto } from "./dto/place-bet.dto";
+export { OpenPositionDto } from "./dto/open-position.dto";
 export { SubmitDisputeDto } from "./dto/submit-dispute.dto";
 
 @Injectable()
@@ -180,8 +180,8 @@ export class MarketsService {
     return saved;
   }
 
-  async placeBet(userId: string, marketId: string, dto: PlaceBetDto) {
-    return this.engine.placeBet(userId, marketId, dto.outcomeId, dto.amount);
+  async placeBet(userId: string, marketId: string, dto: OpenPositionDto) {
+    return this.engine.placePosition(userId, marketId, dto.outcomeId, dto.amount);
     // cache invalidation handled inside ParimutuelEngine.placeBet
   }
 

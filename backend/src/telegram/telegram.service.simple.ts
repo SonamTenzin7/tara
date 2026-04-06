@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { User } from "../entities/user.entity";
 import { Market } from "../entities/market.entity";
-import { Bet, BetStatus } from "../entities/bet.entity";
+import { Position, PositionStatus } from "../entities/position.entity";
 
 @Injectable()
 export class TelegramSimpleService {
@@ -78,18 +78,18 @@ export class TelegramSimpleService {
     }
   }
 
-  async sendBetResult(bet: Bet, market: Market): Promise<void> {
+  async sendPositionResult(bet: Position, market: Market): Promise<void> {
     const user = await this.userRepository.findOne({
       where: { id: bet.userId },
     });
 
     if (!user?.telegramId) return;
 
-    const result = bet.status === BetStatus.WON ? "✅ WON" : "❌ LOST";
-    const message = `🎯 <b>Bet Result</b>\n\n📊 ${market.title}\n📈 Result: ${result}\n💰 Amount: $${bet.amount}`;
+    const result = bet.status === PositionStatus.WON ? "✅ WON" : "❌ LOST";
+    const message = `🎯 <b>Position Result</b>\n\n📊 ${market.title}\n📈 Result: ${result}\n💰 Amount: $${bet.amount}`;
 
     await this.sendMessage(Number(user.telegramId), message);
 
-    this.logger.log(`Bet result sent to user ${user.id}: ${bet.status}`);
+    this.logger.log(`Position result sent to user ${user.id}: ${bet.status}`);
   }
 }

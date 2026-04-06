@@ -3,7 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { User } from "../entities/user.entity";
 import { Market } from "../entities/market.entity";
-import { Bet } from "../entities/bet.entity";
+import { Position } from "../entities/position.entity";
 import { AuthMethod } from "../entities/auth-method.entity";
 import { Transaction } from "../entities/transaction.entity";
 import { Payment } from "../entities/payment.entity";
@@ -21,7 +21,7 @@ import { TelegramChannelController } from "./telegram-channel.controller";
     TypeOrmModule.forFeature([
       User,
       Market,
-      Bet,
+      Position,
       AuthMethod,
       Transaction,
       Payment,

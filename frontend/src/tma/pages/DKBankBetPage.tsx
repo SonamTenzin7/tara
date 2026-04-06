@@ -286,17 +286,17 @@ export const DKBankBetPage: FC = () => {
           {betSuccess && (
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: "32px 20px", textAlign: "center", boxShadow: "var(--shadow-sm)" }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#16a34a", marginBottom: 6 }}>Bet Placed!</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#16a34a", marginBottom: 6 }}>Position Opened!</div>
               <div style={{ fontSize: 13, color: "var(--text-subtle)" }}>
-                Your payment was confirmed and your bet has been registered.
+                Your payment was confirmed and your position has been registered.
               </div>
             </div>
           )}
 
           {!canBet && (
             <Placeholder
-              header={market.status === "upcoming" ? "Opening Soon" : "Betting Closed"}
-              description={market.status === "upcoming" ? "This market will open soon." : "Betting is no longer available."}
+              header={market.status === "upcoming" ? "Opening Soon" : "Market Closed"}
+              description={market.status === "upcoming" ? "This market will open soon." : "This market is no longer accepting positions."}
             />
           )}
         </div>

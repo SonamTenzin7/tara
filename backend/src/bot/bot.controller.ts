@@ -93,6 +93,7 @@ export class BotController {
       switch (message.text) {
         case "/start": {
           const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || "";
+          const channelUrl = process.env.TELEGRAM_CHANNEL_URL || "";
           const botToken = process.env.TELEGRAM_BOT_TOKEN;
           const payload: Record<string, unknown> = {
             chat_id: chatId,
@@ -105,10 +106,11 @@ export class BotController {
               "/help    - Show all commands",
             parse_mode: "HTML",
           };
-          if (miniAppUrl) {
-            payload.reply_markup = {
-              inline_keyboard: [[{ text: "🚀 Open Tara", url: miniAppUrl }]],
-            };
+          const buttons: { text: string; url: string }[] = [];
+          if (miniAppUrl) buttons.push({ text: "🚀 Open Tara", url: miniAppUrl });
+          if (channelUrl) buttons.push({ text: "📢 Join Channel", url: channelUrl });
+          if (buttons.length) {
+            payload.reply_markup = { inline_keyboard: [buttons] };
           }
           const startRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
             method: "POST",

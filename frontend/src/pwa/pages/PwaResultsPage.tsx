@@ -118,7 +118,7 @@ export function PwaResultsPage() {
               gap: 10, marginBottom: 24,
             }}>
               {[
-                { label: "Total bets", value: bets.length },
+                { label: "Contracts", value: bets.length },
                 { label: "Won", value: won.length, color: "#22c55e" },
                 { label: "Lost", value: lost.length, color: "#ef4444" },
                 { label: "Win rate", value: `${winRate}%`, color: Number(winRate) >= 50 ? "#22c55e" : "#f59e0b" },
@@ -143,7 +143,7 @@ export function PwaResultsPage() {
               padding: "12px 16px", marginBottom: 20,
               display: "flex", justifyContent: "space-between", alignItems: "center",
             }}>
-              <span style={{ color: "var(--text-subtle)", fontSize: "0.85rem" }}>Total winnings</span>
+              <span style={{ color: "var(--text-subtle)", fontSize: "0.85rem" }}>Total returns</span>
               <span style={{ color: "#22c55e", fontWeight: 800, fontSize: "1rem" }}>
                 BTN {totalWon.toLocaleString()}
               </span>

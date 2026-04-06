@@ -14,7 +14,7 @@ import { JwtAuthGuard } from "../auth/guards";
 import { User } from "../entities/user.entity";
 import { Payment } from "../entities/payment.entity";
 import { Transaction, TransactionType } from "../entities/transaction.entity";
-import { Bet, BetStatus } from "../entities/bet.entity";
+import { Position, PositionStatus } from "../entities/position.entity";
 import { RedisService } from "../redis/redis.service";
 
 // ─── Response schemas for Swagger ────────────────────────────────────────────
@@ -37,7 +37,7 @@ class ProfileResponse {
 
 class TransactionResponse {
   @ApiProperty({ example: "uuid-5678" }) id: string;
-  @ApiProperty({ enum: TransactionType, example: TransactionType.BET_PLACED })
+  @ApiProperty({ enum: TransactionType, example: TransactionType.POSITION_OPENED })
   type: TransactionType;
   @ApiProperty({
     example: -100.0,
@@ -46,17 +46,17 @@ class TransactionResponse {
   amount: number;
   @ApiProperty({ example: 1600.0 }) balanceBefore: number;
   @ApiProperty({ example: 1500.0 }) balanceAfter: number;
-  @ApiPropertyOptional({ example: "Bet on outcome: Team A" }) note: string;
-  @ApiPropertyOptional({ example: "uuid-bet" }) betId: string;
+  @ApiPropertyOptional({ example: "Position on outcome: Team A" }) note: string;
+  @ApiPropertyOptional({ example: "uuid-position" }) positionId: string;
   @ApiPropertyOptional({ example: "uuid-payment" }) paymentId: string;
   @ApiProperty() createdAt: Date;
 }
 
-class BetResponse {
+class PositionResponse {
   @ApiProperty({ example: "uuid-bet" }) id: string;
   @ApiProperty({ example: 100.0 }) amount: number;
-  @ApiProperty({ enum: BetStatus, example: BetStatus.PENDING })
-  status: BetStatus;
+  @ApiProperty({ enum: PositionStatus, example: PositionStatus.PENDING })
+  status: PositionStatus;
   @ApiPropertyOptional({
     example: 1.8,
     description: "Parimutuel odds at time of placement",
@@ -86,7 +86,7 @@ export class UsersController {
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
     @InjectRepository(Transaction)
     private transactionRepo: Repository<Transaction>,
-    @InjectRepository(Bet) private betRepo: Repository<Bet>,
+    @InjectRepository(Position) private betRepo: Repository<Position>,
     private readonly redis: RedisService,
   ) {}
 
@@ -195,11 +195,11 @@ export class UsersController {
   @ApiQuery({
     name: "status",
     required: false,
-    enum: BetStatus,
+    enum: PositionStatus,
     description: "Filter by bet status",
   })
-  @ApiResponse({ status: 200, type: [BetResponse] })
-  getMyBets(@Request() req: any, @Query("status") status?: BetStatus) {
+  @ApiResponse({ status: 200, type: [PositionResponse] })
+  getMyPositions(@Request() req: any, @Query("status") status?: PositionStatus) {
     const where: any = { userId: req.user.userId };
     if (status) where.status = status;
     return this.betRepo.find({
@@ -215,7 +215,7 @@ export class UsersController {
   @ApiOperation({
     summary: "Get my results — bets that have been won, lost, or refunded",
   })
-  @ApiResponse({ status: 200, type: [BetResponse] })
+  @ApiResponse({ status: 200, type: [PositionResponse] })
   getResults(@Request() req: any) {
     return this.betRepo
       .createQueryBuilder("bet")
@@ -223,7 +223,7 @@ export class UsersController {
       .leftJoinAndSelect("bet.outcome", "outcome")
       .where("bet.userId = :userId", { userId: req.user.userId })
       .andWhere("bet.status IN (:...statuses)", {
-        statuses: [BetStatus.WON, BetStatus.LOST, BetStatus.REFUNDED],
+        statuses: [PositionStatus.WON, PositionStatus.LOST, PositionStatus.REFUNDED],
       })
       .orderBy("bet.placedAt", "DESC")
       .getMany();

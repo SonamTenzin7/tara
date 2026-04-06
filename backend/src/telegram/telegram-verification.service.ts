@@ -10,7 +10,7 @@ import { createHmac } from "crypto";
 import { ConfigService } from "@nestjs/config";
 import { User } from "../entities/user.entity";
 import { AuthMethod } from "../entities/auth-method.entity";
-import { Bet } from "../entities/bet.entity";
+import { Position } from "../entities/position.entity";
 import { Transaction } from "../entities/transaction.entity";
 import { Payment } from "../entities/payment.entity";
 import { DKGatewayService } from "../payment/services/dk-gateway/dk-gateway.service";
@@ -35,8 +35,8 @@ export class TelegramVerificationService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(AuthMethod)
     private readonly authMethodRepo: Repository<AuthMethod>,
-    @InjectRepository(Bet)
-    private readonly betRepo: Repository<Bet>,
+    @InjectRepository(Position)
+    private readonly betRepo: Repository<Position>,
     @InjectRepository(Transaction)
     private readonly transactionRepo: Repository<Transaction>,
     @InjectRepository(Payment)

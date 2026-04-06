@@ -60,8 +60,8 @@ export const PwaBetForm: FC<PwaBetFormProps> = ({ market, onBetPlaced }) => {
     return (
       <div style={{ background: "var(--bg-card)", border: "1.5px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "40px 20px", textAlign: "center", boxShadow: "var(--shadow-premium)" }}>
         <div style={{ fontSize: 60, marginBottom: 16 }}>✨</div>
-        <div style={{ fontWeight: 900, fontSize: "1.4rem", color: "#22c55e", marginBottom: 8, fontFamily: "var(--font-display)" }}>Bet Placed!</div>
-        <div style={{ fontSize: "0.95rem", color: "var(--text-muted)", fontWeight: 500 }}>Your prediction is now live in the pool. Good luck!</div>
+        <div style={{ fontWeight: 900, fontSize: "1.4rem", color: "#22c55e", marginBottom: 8, fontFamily: "var(--font-display)" }}>Position Opened!</div>
+        <div style={{ fontSize: "0.95rem", color: "var(--text-muted)", fontWeight: 500 }}>Your contract is now live in the pool.</div>
       </div>
     );
   }

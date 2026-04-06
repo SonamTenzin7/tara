@@ -1,7 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import { ParimutuelEngine } from "./parimutuel.engine";
 import { MarketStatus } from "../entities/market.entity";
-import { BetStatus } from "../entities/bet.entity";
+import { PositionStatus as BetStatus } from "../entities/position.entity";
 import { TransactionType } from "../entities/transaction.entity";
 import { LMSRService } from "./lmsr.service";
 
@@ -149,10 +149,10 @@ describe("ParimutuelEngine.placeBet", () => {
 
   it("throws when amount <= 0", async () => {
     await expect(
-      engine.placeBet("user-1", "market-1", "o1", 0),
+      engine.placePosition("user-1", "market-1", "o1", 0),
     ).rejects.toThrow(BadRequestException);
     await expect(
-      engine.placeBet("user-1", "market-1", "o1", -5),
+      engine.placePosition("user-1", "market-1", "o1", -5),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -171,7 +171,7 @@ describe("ParimutuelEngine.placeBet", () => {
     });
 
     await expect(
-      engine.placeBet("user-1", "market-1", "o1", 100),
+      engine.placePosition("user-1", "market-1", "o1", 100),
     ).rejects.toThrow("Market is not open for betting");
   });
 
@@ -204,25 +204,25 @@ describe("ParimutuelEngine.placeBet", () => {
     });
 
     await expect(
-      engine.placeBet("user-1", "market-1", "o1", 200),
+      engine.placePosition("user-1", "market-1", "o1", 200),
     ).rejects.toThrow("Insufficient balance");
   });
 
   it("throws when outcome not found in market", async () => {
     await expect(
-      engine.placeBet("user-1", "market-1", "nonexistent-outcome", 100),
+      engine.placePosition("user-1", "market-1", "nonexistent-outcome", 100),
     ).rejects.toThrow("Outcome not found in this market");
   });
 
-  it("successfully creates a bet and debit transaction", async () => {
-    const savedBet = { id: "bet-1", status: BetStatus.PENDING, amount: 100 };
+  it("successfully creates a position and debit transaction", async () => {
+    const savedPosition = { id: "position-1", status: BetStatus.PENDING, amount: 100 };
     mockEm.save.mockImplementation((_entity: any, data: any) => {
-      if (data?.status === BetStatus.PENDING) return Promise.resolve(savedBet);
+      if (data?.status === BetStatus.PENDING) return Promise.resolve(savedPosition);
       return Promise.resolve(data);
     });
 
-    const result = await engine.placeBet("user-1", "market-1", "o1", 100);
-    expect(result).toMatchObject({ id: "bet-1", status: BetStatus.PENDING });
+    const result = await engine.placePosition("user-1", "market-1", "o1", 100);
+    expect(result).toMatchObject({ id: "position-1", status: BetStatus.PENDING });
     expect(mockRedis.releaseLock).toHaveBeenCalledWith(
       "market:market-1",
       "lock-token",
@@ -552,7 +552,7 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     const { engine, savedItems } = makeResolvableEngine(bets, winnerOutcome, market);
     await engine.resolveMarket("market-1", "winner");
 
-    const payoutTx = savedItems.find((i) => i.type === TransactionType.BET_PAYOUT);
+    const payoutTx = savedItems.find((i) => i.type === TransactionType.POSITION_PAYOUT);
     expect(payoutTx).toBeDefined();
     expect(payoutTx.amount).toBeCloseTo(200);
     expect(payoutTx.userId).toBe("u1");

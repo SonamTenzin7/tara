@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Not, IsNull } from "typeorm";
 import { User } from "../entities/user.entity";
 import { Market, MarketStatus } from "../entities/market.entity";
-import { Bet, BetStatus } from "../entities/bet.entity";
+import { Position, PositionStatus } from "../entities/position.entity";
 
 interface TelegramUser {
   id: number;
@@ -54,7 +54,7 @@ export class TelegramService {
     @InjectRepository(User) private readonly userRepository: Repository<User>,
     @InjectRepository(Market)
     private readonly marketRepository: Repository<Market>,
-    @InjectRepository(Bet) private readonly betRepository: Repository<Bet>,
+    @InjectRepository(Position) private readonly betRepository: Repository<Position>,
   ) {
     this.botToken = this.configService.getOrThrow<string>("TELEGRAM_BOT_TOKEN");
     this.webhookUrl = this.configService.getOrThrow<string>("TELEGRAM_WEBHOOK_URL");
@@ -135,20 +135,20 @@ export class TelegramService {
     );
   }
 
-  async sendBetResult(bet: Bet, market: Market): Promise<void> {
+  async sendPositionResult(bet: Position, market: Market): Promise<void> {
     const user = await this.userRepository.findOne({
       where: { id: bet.userId },
     });
 
     if (!user?.telegramId) return;
 
-    const message = this.formatBetResult(bet, market);
+    const message = this.formatPositionResult(bet, market);
     await this.sendMessage(Number(user.telegramId), message);
 
     // Update user streak
-    await this.updateUserStreak(user.id, bet.status === BetStatus.WON);
+    await this.updateUserStreak(user.id, bet.status === PositionStatus.WON);
 
-    this.logger.log(`Bet result sent to user ${user.id}: ${bet.status}`);
+    this.logger.log(`Position result sent to user ${user.id}: ${bet.status}`);
   }
 
   async sendPredictionRequest(chatId: number): Promise<void> {
@@ -178,7 +178,7 @@ export class TelegramService {
         const marketId = data.replace("predict_", "");
         await this.sendMiniAppLink(from.id, marketId, message.message_id);
       } else if (data.startsWith("bet_")) {
-        await this.handleQuickBet(data, from.id);
+        await this.handleQuickPosition(data, from.id);
       } else if (data === "view_portfolio") {
         await this.sendPortfolioView(from.id);
       } else if (data === "view_markets") {
@@ -214,7 +214,7 @@ export class TelegramService {
     );
   }
 
-  private async handleQuickBet(
+  private async handleQuickPosition(
     callbackData: string,
     userId: number,
   ): Promise<void> {
@@ -294,13 +294,13 @@ export class TelegramService {
     );
   }
 
-  private formatBetResult(bet: Bet, market: Market): string {
+  private formatPositionResult(bet: Position, market: Market): string {
     const outcome = market.outcomes.find((o) => o.id === bet.outcomeId);
-    const result = bet.status === BetStatus.WON ? "✅ WON" : "❌ LOST";
+    const result = bet.status === PositionStatus.WON ? "✅ WON" : "❌ LOST";
     const amount = bet.amount.toLocaleString();
 
     return (
-      `🎯 <b>Bet Result</b>\n\n` +
+      `🎯 <b>Position Result</b>\n\n` +
       `📊 ${market.title}\n` +
       `🎲 Your pick: ${outcome?.label}\n` +
       `💰 Amount: $${amount}\n` +
@@ -308,19 +308,19 @@ export class TelegramService {
     );
   }
 
-  private formatPortfolioView(user: User, bets: Bet[]): string {
-    const totalBets = bets.length;
-    const wonBets = bets.filter((b) => b.status === BetStatus.WON).length;
+  private formatPortfolioView(user: User, bets: Position[]): string {
+    const totalPositions = bets.length;
+    const wonPositions = bets.filter((b) => b.status === PositionStatus.WON).length;
     const winRate =
-      totalBets > 0 ? ((wonBets / totalBets) * 100).toFixed(1) : "0";
+      totalPositions > 0 ? ((wonPositions / totalPositions) * 100).toFixed(1) : "0";
     const streak = user.telegramStreak || 0;
 
     return (
       `📊 <b>Your Portfolio</b>\n\n` +
       `🔥 Current Streak: ${streak} 🔥\n` +
       `📈 Win Rate: ${winRate}%\n` +
-      `💰 Total Bets: ${totalBets}\n` +
-      `✅ Won: ${wonBets}\n\n` +
+      `💰 Total Positions: ${totalPositions}\n` +
+      `✅ Won: ${wonPositions}\n\n` +
       `👇 View more details in the Mini App`
     );
   }

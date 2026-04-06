@@ -257,11 +257,11 @@ export function DKBankConfirmModal({
                 Payment Confirmed!
               </div>
               <div style={{ fontSize: 13, color: "var(--text-subtle)" }}>
-                Your bet on{" "}
+                Your position on{" "}
                 <strong style={{ color: "var(--text-main)" }}>
                   {outcome?.label}
                 </strong>{" "}
-                has been placed.
+                is now open.
               </div>
             </div>
           )}

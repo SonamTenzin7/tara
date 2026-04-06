@@ -302,7 +302,7 @@ export function TmaPaymentModal({
                 animation: "tmaFadeIn 0.35s ease 0.3s both",
               }}
             >
-              Bet Placed!
+              Position Opened!
             </div>
             <div
               style={{
