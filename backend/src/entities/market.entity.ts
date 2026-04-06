@@ -74,6 +74,9 @@ export class Market {
   })
   category: MarketCategory;
 
+  @Column({ type: "text", nullable: true })
+  resolutionCriteria: string;
+
   @Column({ type: "uuid", nullable: true })
   resolvedOutcomeId: string;
 

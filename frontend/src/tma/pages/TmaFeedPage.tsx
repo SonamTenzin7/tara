@@ -60,8 +60,9 @@ function MarketCard({
   const sentiment = (() => {
     const raw = market.outcomes.map((o) => ({
       ...o,
-      pct:
-        totalPool > 0
+      pct: (o.lmsrProbability != null && o.lmsrProbability > 0)
+        ? o.lmsrProbability * 100
+        : totalPool > 0
           ? (Number(o.totalBetAmount) / totalPool) * 100
           : 100 / market.outcomes.length,
     }));
@@ -189,6 +190,14 @@ function MarketCard({
               >
                 {s.pct.toFixed(0)}%
               </div>
+              {s.reputationSignal != null && (
+                <div style={{ fontSize: "0.55rem", fontWeight: 700, color: "#f59e0b", display: "flex", alignItems: "center", gap: 2 }}>
+                  <svg width="7" height="7" viewBox="0 0 24 24" fill="#f59e0b" stroke="none">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                  {Math.round(s.reputationSignal * 100)}%
+                </div>
+              )}
             </button>
           ))
         )}
@@ -502,13 +511,16 @@ export const TmaFeedPage: FC = () => {
             </div>
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
               {trendingMarkets.map((m) => {
-                const top = m.outcomes.reduce((a, b) =>
-                  Number(b.totalBetAmount) > Number(a.totalBetAmount) ? b : a,
-                  m.outcomes[0],
-                );
-                const topPct = Number(m.totalPool) > 0
-                  ? Math.round((Number(top.totalBetAmount) / Number(m.totalPool)) * 100)
-                  : 0;
+                const top = m.outcomes.reduce((a, b) => {
+                  const aProb = a.lmsrProbability ?? (Number(m.totalPool) > 0 ? Number(a.totalBetAmount) / Number(m.totalPool) : 0);
+                  const bProb = b.lmsrProbability ?? (Number(m.totalPool) > 0 ? Number(b.totalBetAmount) / Number(m.totalPool) : 0);
+                  return bProb > aProb ? b : a;
+                }, m.outcomes[0]);
+                const topPct = top.lmsrProbability != null && top.lmsrProbability > 0
+                  ? Math.round(top.lmsrProbability * 100)
+                  : Number(m.totalPool) > 0
+                    ? Math.round((Number(top.totalBetAmount) / Number(m.totalPool)) * 100)
+                    : 0;
                 return (
                   <button
                     key={m.id}

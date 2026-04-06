@@ -87,6 +87,7 @@ export class MarketsService {
         title: dto.title,
         description: dto.description,
         imageUrl: dto.imageUrl,
+        resolutionCriteria: dto.resolutionCriteria ?? undefined,
         opensAt: dto.opensAt ? new Date(dto.opensAt) : undefined,
         closesAt: dto.closesAt ? new Date(dto.closesAt) : undefined,
         houseEdgePct: dto.houseEdgePct ?? 5,
@@ -169,6 +170,7 @@ export class MarketsService {
     if (dto.title) market.title = dto.title;
     if (dto.description) market.description = dto.description;
     if (dto.imageUrl) market.imageUrl = dto.imageUrl;
+    if (dto.resolutionCriteria !== undefined) market.resolutionCriteria = dto.resolutionCriteria;
     if (dto.opensAt) market.opensAt = new Date(dto.opensAt);
     if (dto.closesAt) market.closesAt = new Date(dto.closesAt);
     if (dto.houseEdgePct !== undefined) market.houseEdgePct = dto.houseEdgePct;
@@ -310,6 +312,55 @@ export class MarketsService {
         );
       }
     });
+  }
+
+  async getResolvedMarkets(): Promise<object[]> {
+    const markets = await this.marketRepo
+      .createQueryBuilder("market")
+      .leftJoinAndSelect("market.outcomes", "outcome")
+      .where("market.status IN (:...statuses)", {
+        statuses: [MarketStatus.RESOLVED, MarketStatus.SETTLED],
+      })
+      .orderBy("market.resolvedAt", "DESC")
+      .getMany();
+
+    return Promise.all(
+      markets.map(async (m) => {
+        const winner = m.outcomes.find((o) => o.id === m.resolvedOutcomeId) ?? null;
+        const participantCount: { count: string } = await this.dataSource
+          .getRepository("Position")
+          .createQueryBuilder("p")
+          .select("COUNT(DISTINCT p.userId)", "count")
+          .where("p.marketId = :id", { id: m.id })
+          .getRawOne()
+          .catch(() =>
+            this.dataSource
+              .getRepository("Bet")
+              .createQueryBuilder("p")
+              .select("COUNT(DISTINCT p.userId)", "count")
+              .where("p.marketId = :id", { id: m.id })
+              .getRawOne(),
+          );
+        return {
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          imageUrl: m.imageUrl,
+          category: m.category,
+          status: m.status,
+          totalPool: m.totalPool,
+          resolutionCriteria: m.resolutionCriteria ?? null,
+          createdAt: m.createdAt,
+          opensAt: m.opensAt,
+          closesAt: m.closesAt,
+          resolvedAt: m.resolvedAt,
+          participantCount: Number(participantCount?.count ?? 0),
+          winner: winner
+            ? { id: winner.id, label: winner.label }
+            : null,
+        };
+      }),
+    );
   }
 
   getDisputesByMarket(marketId: string): Promise<Dispute[]> {

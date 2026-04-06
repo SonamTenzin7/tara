@@ -46,6 +46,13 @@ export class MarketsController {
     return this.marketsService.findAll(q);
   }
 
+  @Get("resolved")
+  @Public()
+  @ApiOperation({ summary: "List resolved/settled markets with winner and resolution criteria" })
+  getResolved() {
+    return this.marketsService.getResolvedMarkets();
+  }
+
   @Get(":id")
   @Public()
   @ApiOperation({ summary: "Get market by ID with outcomes & live odds" })

@@ -14,6 +14,7 @@ import { ParimutuelEngine } from "./parimutuel.engine";
 import { LMSRService } from "./lmsr.service";
 import { KeeperService } from "./keeper.service";
 import { ReputationService } from "./reputation.service";
+import { TelegramModule } from "../telegram/telegram.module";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ReputationService } from "./reputation.service";
       Transaction,
       Dispute,
     ]),
+    TelegramModule,
   ],
   providers: [MarketsService, ParimutuelEngine, LMSRService, KeeperService, ReputationService],
   controllers: [MarketsController],

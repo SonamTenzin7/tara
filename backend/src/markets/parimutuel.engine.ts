@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, Logger, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, DataSource } from "typeorm";
+import { Repository, DataSource, In } from "typeorm";
 import { RedisService } from "../redis/redis.service";
 import { Market, MarketStatus } from "../entities/market.entity";
 import { Outcome } from "../entities/outcome.entity";
@@ -12,6 +12,7 @@ import { Dispute } from "../entities/dispute.entity";
 import { User } from "../entities/user.entity";
 import { LMSRService } from "./lmsr.service";
 import { ReputationService } from "./reputation.service";
+import { TelegramSimpleService } from "../telegram/telegram.service.simple";
 
 
 // ─── Valid state machine transitions ────────────────────────────────────────
@@ -46,6 +47,7 @@ export class ParimutuelEngine implements OnModuleInit {
     private lmsrService: LMSRService,
     private redis: RedisService,
     private reputationService: ReputationService,
+    private telegramSimple: TelegramSimpleService,
   ) {}
 
   private async getCreditsBalance(em: { getRepository: Function }, userId: string): Promise<number> {
@@ -250,9 +252,9 @@ export class ParimutuelEngine implements OnModuleInit {
     // Settle
     const settlement = await this.settleMarket(market, winner);
 
-    // Recalculate reputation scores for all bettors — fire and forget
-    this.reputationService.recalculateForMarket(marketId).catch((err) =>
-      this.logger.warn(`[Reputation] Recalculation failed for market ${marketId}: ${err.message}`),
+    // Recalculate reputation + send individual result DMs — fire and forget
+    this.sendSettlementNotifications(market, winner, settlement).catch((err) =>
+      this.logger.warn(`[Notify] Settlement notifications failed for market ${marketId}: ${err.message}`),
     );
 
     return settlement;
@@ -352,7 +354,99 @@ export class ParimutuelEngine implements OnModuleInit {
     });
   }
 
-  // Cancel market: refund all bets 
+  // ── Post-settlement: reputation recalc + individual DM notifications ────────
+
+  private async sendSettlementNotifications(
+    market: Market,
+    winner: Outcome,
+    settlement: Settlement,
+  ): Promise<void> {
+    // 1. Snapshot tiers before recalculation so we can detect upgrades
+    const bets = await this.betRepo.find({
+      where: { marketId: market.id },
+      relations: ["user"],
+    });
+
+    const tiersBefore: Record<string, string> = {};
+    for (const bet of bets) {
+      if (bet.user) tiersBefore[bet.userId] = bet.user.reputationTier ?? "newcomer";
+    }
+
+    // 2. Recalculate reputation for all bettors
+    await this.reputationService.recalculateForMarket(market.id);
+
+    // 3. Reload updated users for tier-change detection
+    const userIds = [...new Set(bets.map((b) => b.userId))];
+    const users = await this.dataSource.getRepository(User).findBy({ id: In(userIds) });
+    const userMap: Record<string, User> = {};
+    for (const u of users) userMap[u.id] = u;
+
+    // 4. Send individual DM to each bettor
+    const payoutPool = settlement.payoutPool;
+    const winnerPool = Number(winner.totalBetAmount);
+
+    for (const bet of bets) {
+      const user = userMap[bet.userId];
+      if (!user?.telegramId) continue;
+
+      const chatId = Number(user.telegramId);
+      const firstName = user.firstName?.trim() || "there";
+      const tierNow = user.reputationTier ?? "newcomer";
+      const tierBefore = tiersBefore[bet.userId] ?? "newcomer";
+      const totalPredictions = user.totalPredictions ?? 0;
+      const accuracy = totalPredictions > 0 && user.reputationScore != null
+        ? `${Math.round(user.reputationScore * 100)}%`
+        : null;
+
+      const tierOrder = ["newcomer", "regular", "reliable", "expert"];
+      const tierUpgraded = tierOrder.indexOf(tierNow) > tierOrder.indexOf(tierBefore);
+
+      if (bet.status === PositionStatus.WON) {
+        const share = winnerPool > 0 ? Number(bet.amount) / winnerPool : 0;
+        const payout = parseFloat((payoutPool * share).toFixed(2));
+        const profit = (payout - Number(bet.amount)).toFixed(2);
+
+        let msg =
+          `✅ <b>You predicted correctly!</b>\n\n` +
+          `📊 ${market.title}\n` +
+          `🎯 Your pick: <b>${winner.label}</b>\n` +
+          `💰 Payout: <b>Nu ${payout.toLocaleString()}</b> (+Nu ${profit})\n`;
+
+        if (accuracy) msg += `⭐ Accuracy: <b>${accuracy}</b> over ${totalPredictions} predictions\n`;
+        if (tierUpgraded) msg += `\n🏆 <b>Tier upgrade! You are now ${tierNow.charAt(0).toUpperCase() + tierNow.slice(1)}.</b>`;
+
+        await this.telegramSimple.sendMessage(chatId, msg).catch(() => {});
+
+        // Streak update
+        const currentStreak = (user.telegramStreak ?? 0) + 1;
+        await this.dataSource.getRepository(User).update(user.id, { telegramStreak: currentStreak });
+        if (currentStreak >= 3) {
+          await this.telegramSimple.sendMessage(
+            chatId,
+            `🔥 <b>${currentStreak} correct in a row, ${firstName}!</b> You're on fire.`,
+          ).catch(() => {});
+        }
+
+      } else if (bet.status === PositionStatus.LOST) {
+        const outcome = market.outcomes.find((o) => o.id === bet.outcomeId);
+
+        let msg =
+          `❌ <b>Not this time.</b>\n\n` +
+          `📊 ${market.title}\n` +
+          `🎯 Your pick: ${outcome?.label ?? "unknown"} · Winner: <b>${winner.label}</b>\n`;
+
+        if (accuracy) msg += `⭐ Accuracy: <b>${accuracy}</b> over ${totalPredictions} predictions\n`;
+        msg += `\n💡 Every prediction builds your reputation. Keep going.`;
+
+        await this.telegramSimple.sendMessage(chatId, msg).catch(() => {});
+        await this.dataSource.getRepository(User).update(user.id, { telegramStreak: 0 }).catch(() => {});
+      }
+    }
+
+    this.logger.log(`[Notify] Settlement DMs sent for market ${market.id} to ${bets.length} bettors`);
+  }
+
+  // Cancel market: refund all bets
   async cancelMarket(marketId: string): Promise<void> {
     await this.dataSource.transaction(async (em) => {
       const market = await em.findOne(Market, {

@@ -14,6 +14,7 @@ import { PwaMyBetsPage } from "@/pwa/pages/PwaMyBetsPage";
 import { PwaResultsPage } from "@/pwa/pages/PwaResultsPage";
 import { TmaPageWrapper } from "@/tma/components/TmaPageWrapper";
 import { TmaProfilePage } from "@/tma/pages/TmaProfilePage";
+import { ResolvedMarketsPage } from "@/tma/pages/ResolvedMarketsPage";
 
 interface Route {
   path: string;
@@ -82,4 +83,5 @@ export const routes: Route[] = [
     title: "Results",
   },
   { path: "/profile", Component: TmaProfilePage, title: "Profile" },
+  { path: "/resolved", Component: ResolvedMarketsPage, title: "Resolution Record" },
 ];

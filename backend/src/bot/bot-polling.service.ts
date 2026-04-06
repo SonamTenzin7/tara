@@ -285,6 +285,7 @@ export class BotPollingService
         { status: MarketStatus.OPEN },
         { status: MarketStatus.RESOLVING },
       ],
+      relations: ["outcomes"],
       order: { closesAt: "ASC" },
       take: 5,
     });
@@ -309,7 +310,24 @@ export class BotPollingService
           })
         : "TBD";
       const statusIcon = m.status === MarketStatus.RESOLVING ? "⚖️" : "🟢";
-      return `${statusIcon} <b>${m.title}</b>\n⏰ ${closes}`;
+
+      const totalPool = Number(m.totalPool);
+      const outcomeLines = (m.outcomes ?? [])
+        .map((o) => {
+          const rawPct = o.lmsrProbability != null && o.lmsrProbability > 0
+            ? o.lmsrProbability * 100
+            : totalPool > 0
+              ? (Number(o.totalBetAmount) / totalPool) * 100
+              : 100 / (m.outcomes?.length || 2);
+          const pct = Math.round(Math.min(100, Math.max(0, rawPct)));
+          const filled = Math.min(10, Math.round(pct / 10));
+          const bar = "█".repeat(filled) + "░".repeat(10 - filled);
+          const label = o.label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          return `${label}: ${bar} ${pct}%`;
+        })
+        .join("\n");
+
+      return `${statusIcon} <b>${m.title}</b>\n<pre>${outcomeLines}</pre>\n⏰ ${closes}`;
     });
 
     // ── Reputation teaser / status ────────────────────────────────────────────

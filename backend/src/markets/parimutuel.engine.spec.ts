@@ -37,13 +37,16 @@ function makeMarket(overrides: any = {}) {
   };
 }
 
+// Null telegram simple service — sendSettlementNotifications is fire-and-forget
+// so null is safe; errors are swallowed by the .catch() in the engine.
+const nullTelegram = null as any;
+
 // ─── calcOdds ─────────────────────────────────────────────────────────────────
 
 describe("ParimutuelEngine.calcOdds", () => {
   let engine: ParimutuelEngine;
 
   beforeEach(() => {
-    // calcOdds is a pure method — no dependencies needed
     engine = new ParimutuelEngine(
       null as any,
       null as any,
@@ -56,6 +59,7 @@ describe("ParimutuelEngine.calcOdds", () => {
       null as any,
       null as any,
       null as any,
+      nullTelegram,
     );
   });
 
@@ -144,6 +148,7 @@ describe("ParimutuelEngine.placeBet", () => {
       mockLmsr,
       mockRedis,
       null as any,
+      nullTelegram,
     );
   });
 
@@ -260,12 +265,10 @@ describe("ParimutuelEngine.transitionMarket", () => {
       null as any,
       null as any,
       null as any,
+      nullTelegram,
     );
 
-    const result = await engine.transitionMarket(
-      "market-1",
-      MarketStatus.CLOSED,
-    );
+    const result = await engine.transitionMarket("market-1", MarketStatus.CLOSED);
     expect(result.status).toBe(MarketStatus.CLOSED);
   });
 
@@ -284,6 +287,7 @@ describe("ParimutuelEngine.transitionMarket", () => {
       null as any,
       null as any,
       null as any,
+      nullTelegram,
     );
 
     await expect(
@@ -305,6 +309,7 @@ describe("ParimutuelEngine.transitionMarket", () => {
       null as any,
       null as any,
       null as any,
+      nullTelegram,
     );
 
     await expect(
@@ -355,6 +360,7 @@ describe("ParimutuelEngine.cancelMarket", () => {
       null as any,
       null as any,
       null as any,
+      nullTelegram,
     );
 
     await engine.cancelMarket("market-1");
@@ -375,9 +381,10 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     const savedItems: any[] = [];
 
     const mockEm: any = {
+      // settleMarket calls em.find(Position, ...) — match by name or class string
       find: jest.fn().mockImplementation((entity: any) => {
-        // Return bets when asked for Bet entity
-        if (entity?.name === "Bet" || String(entity).includes("Bet")) {
+        const name = entity?.name ?? String(entity);
+        if (name.includes("Position") || name.includes("Bet")) {
           return Promise.resolve(bets);
         }
         return Promise.resolve([]);
@@ -398,7 +405,10 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     };
 
     const mockMarketRepo = {
-      findOne: jest.fn().mockResolvedValue({ ...market, outcomes: [winner, ...market.outcomes.filter((o: any) => o.id !== winner.id)] }),
+      findOne: jest.fn().mockResolvedValue({
+        ...market,
+        outcomes: [winner, ...market.outcomes.filter((o: any) => o.id !== winner.id)],
+      }),
       findOneBy: jest.fn().mockResolvedValue(market),
       save: jest.fn().mockImplementation((m: any) => Promise.resolve(m)),
     };
@@ -415,18 +425,37 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
       recalculateForMarket: jest.fn().mockResolvedValue(undefined),
     };
 
+    // betRepo used by sendSettlementNotifications (fire-and-forget, errors swallowed)
+    const mockBetRepo = {
+      find: jest.fn().mockResolvedValue(
+        bets.map((b) => ({
+          ...b,
+          user: { id: b.userId, telegramId: null, reputationTier: "newcomer" },
+        })),
+      ),
+    };
+
+    const mockDataSource = {
+      transaction: (cb: Function) => cb(mockEm),
+      getRepository: jest.fn().mockReturnValue({
+        findBy: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue(undefined),
+      }),
+    };
+
     const engine = new ParimutuelEngine(
       mockMarketRepo as any,
       mockOutcomeRepo as any,
-      null as any,
+      mockBetRepo as any,
       null as any,
       null as any,
       null as any,
       mockDisputeRepo as any,
-      { transaction: (cb: Function) => cb(mockEm) } as any,
+      mockDataSource as any,
       null as any,
       null as any,
       mockReputationService as any,
+      nullTelegram,
     );
 
     return { engine, savedItems, mockEm, mockMarketRepo, mockOutcomeRepo };
@@ -453,21 +482,16 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
 
     const wonBet = savedItems.find((i) => i.id === "b1");
     const lostBet = savedItems.find((i) => i.id === "b2");
-
     expect(wonBet?.status).toBe(BetStatus.WON);
     expect(lostBet?.status).toBe(BetStatus.LOST);
   });
 
   it("pays out the full payout pool (0% house edge) to single winner", async () => {
-    // totalPool = 1000, houseEdge = 0% → payoutPool = 1000
-    // Single winning bet of 1000 (100% share) → payout = 1000
     const market = makeMarket({
       status: MarketStatus.RESOLVING,
       totalPool: 1000,
       houseEdgePct: 0,
-      outcomes: [
-        makeOutcome({ id: "winner", totalBetAmount: 1000 }),
-      ],
+      outcomes: [makeOutcome({ id: "winner", totalBetAmount: 1000 })],
     });
     const winnerOutcome = market.outcomes[0];
     const bets = [
@@ -483,7 +507,6 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
 
   it("deducts house edge from payout pool", async () => {
     // totalPool = 1000, houseEdge = 10% → payoutPool = 900
-    // Winner holds 100% → payout = 900
     const market = makeMarket({
       status: MarketStatus.RESOLVING,
       totalPool: 1000,
@@ -502,22 +525,17 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     const { engine, savedItems } = makeResolvableEngine(bets, winnerOutcome, market);
     await engine.resolveMarket("market-1", "winner");
 
-    // payoutPool = 1000 * 0.9 = 900; winner holds 500/500 = 100% → payout = 900
     const wonBet = savedItems.find((i) => i.id === "b1");
     expect(wonBet?.payout).toBeCloseTo(900);
   });
 
   it("splits payout pool proportionally among multiple winners", async () => {
-    // totalPool = 300, houseEdge = 0% → payoutPool = 300
-    // Two winning bets: u1=200, u2=100 → shares: 2/3, 1/3
-    // Payouts: u1 = 200, u2 = 100
+    // u1=200, u2=100 → shares 2/3, 1/3 of pool=300
     const market = makeMarket({
       status: MarketStatus.RESOLVING,
       totalPool: 300,
       houseEdgePct: 0,
-      outcomes: [
-        makeOutcome({ id: "winner", totalBetAmount: 300 }),
-      ],
+      outcomes: [makeOutcome({ id: "winner", totalBetAmount: 300 })],
     });
     const winnerOutcome = market.outcomes[0];
     const bets = [
@@ -530,14 +548,13 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
 
     const bet1 = savedItems.find((i) => i.id === "b1");
     const bet2 = savedItems.find((i) => i.id === "b2");
-
-    expect(bet1?.payout).toBeCloseTo(200); // 2/3 of 300
-    expect(bet2?.payout).toBeCloseTo(100); // 1/3 of 300
+    expect(bet1?.payout).toBeCloseTo(200);
+    expect(bet2?.payout).toBeCloseTo(100);
     expect(bet1?.status).toBe(BetStatus.WON);
     expect(bet2?.status).toBe(BetStatus.WON);
   });
 
-  it("creates a BET_PAYOUT transaction for each winning bet", async () => {
+  it("creates a POSITION_PAYOUT transaction for each winning bet", async () => {
     const market = makeMarket({
       status: MarketStatus.RESOLVING,
       totalPool: 200,
@@ -556,6 +573,199 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     expect(payoutTx).toBeDefined();
     expect(payoutTx.amount).toBeCloseTo(200);
     expect(payoutTx.userId).toBe("u1");
+  });
+
+  it("credits payout to the winner's wallet and not the loser's", async () => {
+    // Setup:
+    //   u1 (winner) has 200 Nu in their wallet before settlement
+    //   u2 (loser)  has 500 Nu in their wallet before settlement
+    //   totalPool = 300, houseEdge = 0% → payoutPool = 300
+    //   u1 bet 200 on winner (100% of winner pool) → payout = 300
+    //   u1 wallet after = 200 + 300 = 500
+    //   u2 wallet stays at 500 (no payout transaction created)
+    const WINNER_BALANCE_BEFORE = 200;
+    const LOSER_BALANCE_BEFORE = 500;
+
+    const market = makeMarket({
+      status: MarketStatus.RESOLVING,
+      totalPool: 300,
+      houseEdgePct: 0,
+      outcomes: [
+        makeOutcome({ id: "winner-outcome", totalBetAmount: 200 }),
+        makeOutcome({ id: "loser-outcome", totalBetAmount: 100 }),
+      ],
+    });
+    const winnerOutcome = market.outcomes[0];
+    const bets = [
+      { id: "b1", userId: "u1-winner", outcomeId: "winner-outcome", amount: 200, status: BetStatus.PENDING },
+      { id: "b2", userId: "u2-loser",  outcomeId: "loser-outcome",  amount: 100, status: BetStatus.PENDING },
+    ];
+
+    const savedItems: any[] = [];
+
+    // Per-user balance mock: returns the correct starting balance per userId
+    const balanceByUser: Record<string, number> = {
+      "u1-winner": WINNER_BALANCE_BEFORE,
+      "u2-loser":  LOSER_BALANCE_BEFORE,
+    };
+
+    const mockEm: any = {
+      find: jest.fn().mockImplementation((entity: any) => {
+        const name = entity?.name ?? String(entity);
+        if (name.includes("Position") || name.includes("Bet")) return Promise.resolve(bets);
+        return Promise.resolve([]);
+      }),
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn().mockImplementation((_entity: any, data: any) => {
+        savedItems.push(data);
+        return Promise.resolve(data);
+      }),
+      create: jest.fn().mockImplementation((_entity: any, data: any) => data),
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockImplementation(() => {
+          let capturedUserId: string | null = null;
+          return {
+            select: jest.fn().mockReturnThis(),
+            where: jest.fn().mockImplementation((_clause: string, params: any) => {
+              if (params?.userId) capturedUserId = params.userId;
+              return { getRawOne: () => Promise.resolve({ balance: balanceByUser[capturedUserId!] ?? 0 }) };
+            }),
+          };
+        }),
+      }),
+    };
+
+    const mockMarketRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        ...market,
+        outcomes: [winnerOutcome, ...market.outcomes.filter((o: any) => o.id !== winnerOutcome.id)],
+      }),
+      findOneBy: jest.fn().mockResolvedValue(market),
+      save: jest.fn().mockImplementation((m: any) => Promise.resolve(m)),
+    };
+
+    const engine = new ParimutuelEngine(
+      mockMarketRepo as any,
+      { save: jest.fn().mockImplementation((o: any) => Promise.resolve(o)) } as any,
+      { find: jest.fn().mockResolvedValue(bets.map((b) => ({ ...b, user: { id: b.userId, telegramId: null, reputationTier: "newcomer" } }))) } as any,
+      null as any, null as any, null as any,
+      { find: jest.fn().mockResolvedValue([]) } as any,
+      { transaction: (cb: Function) => cb(mockEm), getRepository: jest.fn().mockReturnValue({ findBy: jest.fn().mockResolvedValue([]), update: jest.fn() }) } as any,
+      null as any, null as any,
+      { recalculateForMarket: jest.fn().mockResolvedValue(undefined) } as any,
+      nullTelegram,
+    );
+
+    await engine.resolveMarket("market-1", "winner-outcome");
+
+    // ── Winner's payout transaction ───────────────────────────────────────────
+    const payoutTxs = savedItems.filter((i) => i.type === TransactionType.POSITION_PAYOUT);
+
+    // Only one payout transaction — for the winner
+    expect(payoutTxs).toHaveLength(1);
+
+    const winnerTx = payoutTxs[0];
+    expect(winnerTx.userId).toBe("u1-winner");           // goes to the right user
+    expect(winnerTx.amount).toBeCloseTo(300);             // full pool (0% edge)
+    expect(winnerTx.balanceBefore).toBe(WINNER_BALANCE_BEFORE);  // 200 before
+    expect(winnerTx.balanceAfter).toBeCloseTo(WINNER_BALANCE_BEFORE + 300); // 500 after
+
+    // ── Loser gets no payout transaction ─────────────────────────────────────
+    const loserPayoutTx = payoutTxs.find((i) => i.userId === "u2-loser");
+    expect(loserPayoutTx).toBeUndefined();
+
+    // ── Loser bet status is LOST ──────────────────────────────────────────────
+    const loserBet = savedItems.find((i) => i.id === "b2");
+    expect(loserBet?.status).toBe(BetStatus.LOST);
+  });
+
+  it("credits correct payout to winner's wallet with 5% house edge", async () => {
+    // totalPool = 300, houseEdge = 5% → houseAmount = 15, payoutPool = 285
+    // u1 bet 200 on winner (100% of winner pool = 200) → payout = 285
+    // u1 wallet: 200 before → 200 + 285 = 485 after
+    // u2 (loser): no payout transaction, wallet untouched
+    const WINNER_BALANCE_BEFORE = 200;
+    const LOSER_BALANCE_BEFORE = 500;
+
+    const market = makeMarket({
+      status: MarketStatus.RESOLVING,
+      totalPool: 300,
+      houseEdgePct: 5,
+      outcomes: [
+        makeOutcome({ id: "winner-outcome", totalBetAmount: 200 }),
+        makeOutcome({ id: "loser-outcome",  totalBetAmount: 100 }),
+      ],
+    });
+    const winnerOutcome = market.outcomes[0];
+    const bets = [
+      { id: "b1", userId: "u1-winner", outcomeId: "winner-outcome", amount: 200, status: BetStatus.PENDING },
+      { id: "b2", userId: "u2-loser",  outcomeId: "loser-outcome",  amount: 100, status: BetStatus.PENDING },
+    ];
+
+    const savedItems: any[] = [];
+    const balanceByUser: Record<string, number> = {
+      "u1-winner": WINNER_BALANCE_BEFORE,
+      "u2-loser":  LOSER_BALANCE_BEFORE,
+    };
+
+    const mockEm: any = {
+      find: jest.fn().mockImplementation((entity: any) => {
+        const name = entity?.name ?? String(entity);
+        if (name.includes("Position") || name.includes("Bet")) return Promise.resolve(bets);
+        return Promise.resolve([]);
+      }),
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn().mockImplementation((_entity: any, data: any) => {
+        savedItems.push(data);
+        return Promise.resolve(data);
+      }),
+      create: jest.fn().mockImplementation((_entity: any, data: any) => data),
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockImplementation(() => {
+          let capturedUserId: string | null = null;
+          return {
+            select: jest.fn().mockReturnThis(),
+            where: jest.fn().mockImplementation((_clause: string, params: any) => {
+              if (params?.userId) capturedUserId = params.userId;
+              return { getRawOne: () => Promise.resolve({ balance: balanceByUser[capturedUserId!] ?? 0 }) };
+            }),
+          };
+        }),
+      }),
+    };
+
+    const engine = new ParimutuelEngine(
+      { findOne: jest.fn().mockResolvedValue({ ...market, outcomes: [winnerOutcome, ...market.outcomes.filter((o: any) => o.id !== winnerOutcome.id)] }), findOneBy: jest.fn().mockResolvedValue(market), save: jest.fn().mockImplementation((m: any) => Promise.resolve(m)) } as any,
+      { save: jest.fn().mockImplementation((o: any) => Promise.resolve(o)) } as any,
+      { find: jest.fn().mockResolvedValue(bets.map((b) => ({ ...b, user: { id: b.userId, telegramId: null, reputationTier: "newcomer" } }))) } as any,
+      null as any, null as any, null as any,
+      { find: jest.fn().mockResolvedValue([]) } as any,
+      { transaction: (cb: Function) => cb(mockEm), getRepository: jest.fn().mockReturnValue({ findBy: jest.fn().mockResolvedValue([]), update: jest.fn() }) } as any,
+      null as any, null as any,
+      { recalculateForMarket: jest.fn().mockResolvedValue(undefined) } as any,
+      nullTelegram,
+    );
+
+    await engine.resolveMarket("market-1", "winner-outcome");
+
+    const payoutTxs = savedItems.filter((i) => i.type === TransactionType.POSITION_PAYOUT);
+
+    // Only the winner gets a payout
+    expect(payoutTxs).toHaveLength(1);
+
+    const winnerTx = payoutTxs[0];
+    expect(winnerTx.userId).toBe("u1-winner");
+    // payoutPool = 300 * 0.95 = 285; u1 holds 100% of winner pool → payout = 285
+    expect(winnerTx.amount).toBeCloseTo(285);
+    expect(winnerTx.balanceBefore).toBe(WINNER_BALANCE_BEFORE);
+    expect(winnerTx.balanceAfter).toBeCloseTo(WINNER_BALANCE_BEFORE + 285); // 485
+
+    // Loser gets no payout
+    expect(payoutTxs.find((i) => i.userId === "u2-loser")).toBeUndefined();
+
+    // Loser bet is LOST
+    const loserBet = savedItems.find((i) => i.id === "b2");
+    expect(loserBet?.status).toBe(BetStatus.LOST);
   });
 
   it("creates a Settlement record with correct accounting", async () => {
@@ -582,10 +792,10 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     );
     expect(settlement).toBeDefined();
     expect(settlement.totalPool).toBe(500);
-    expect(settlement.houseAmount).toBeCloseTo(25); // 5% of 500
+    expect(settlement.houseAmount).toBeCloseTo(25);       // 5% of 500
     expect(settlement.payoutPool).toBeCloseTo(475);
-    expect(settlement.totalBets).toBe(2);
-    expect(settlement.winningBets).toBe(1);
+    expect(settlement.totalPositions).toBe(2);            // entity field name
+    expect(settlement.winningPositions).toBe(1);          // entity field name
   });
 
   it("transitions market to SETTLED status after settlement", async () => {
@@ -620,7 +830,8 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     const engine = new ParimutuelEngine(
       mockMarketRepo as any,
       null as any, null as any, null as any, null as any,
-      null as any, null as any, null as any, null as any, null as any, null as any,
+      null as any, null as any, null as any, null as any, null as any,
+      null as any, nullTelegram,
     );
 
     await expect(
@@ -638,7 +849,8 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
     const engine = new ParimutuelEngine(
       mockMarketRepo as any,
       null as any, null as any, null as any, null as any,
-      null as any, null as any, null as any, null as any, null as any, null as any,
+      null as any, null as any, null as any, null as any, null as any,
+      null as any, nullTelegram,
     );
 
     await expect(
@@ -647,7 +859,7 @@ describe("ParimutuelEngine.resolveMarket → settleMarket", () => {
   });
 });
 
-// LMSRService
+// ─── LMSRService ─────────────────────────────────────────────────────────────
 
 describe("LMSRService.calculateProbabilities", () => {
   const svc = new LMSRService();

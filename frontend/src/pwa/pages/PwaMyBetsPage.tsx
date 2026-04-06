@@ -135,7 +135,9 @@ export function PwaMyBetsPage() {
       )}
       {!loading && !error && filtered.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-subtle)" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-subtle)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 12 }}>
+            <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
+          </svg>
           <div>No predictions yet.{" "}
             <Link to="/markets" style={{ color: "var(--accent)" }}>Browse markets →</Link>
           </div>

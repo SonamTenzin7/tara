@@ -16,10 +16,10 @@ export class Settlement {
   @Column({ type: "uuid" })
   winningOutcomeId: string;
 
-  @Column({ name: "total_bets", type: "int", default: 0 })
+  @Column({ name: "totalBets", type: "int", default: 0 })
   totalPositions: number;
 
-  @Column({ name: "winning_bets", type: "int", default: 0 })
+  @Column({ name: "winningBets", type: "int", default: 0 })
   winningPositions: number;
 
   @Column({ type: "decimal", precision: 18, scale: 2, default: 0 })

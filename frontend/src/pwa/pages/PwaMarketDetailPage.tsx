@@ -237,7 +237,10 @@ export function PwaMarketDetailPage() {
                   <div style={{ fontWeight: 900, color: "#92400e", fontSize: "1rem", letterSpacing: "0.02em" }}>DISPUTE WINDOW</div>
                   <div style={{ fontSize: "0.8rem", color: "#b45309", marginTop: "2px", fontWeight: 700 }}>{disputeTimeLeft}</div>
                 </div>
-                <div style={{ fontSize: "2rem" }}>⚖️</div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v3" /><path d="m3 9 2 2 2-2" /><path d="m17 9 2 2 2-2" />
+                  <path d="M5 11a7 7 0 0 0 14 0" /><path d="M12 21v-6" /><path d="M9 21h6" />
+                </svg>
               </div>
               
               <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: 20 }}>

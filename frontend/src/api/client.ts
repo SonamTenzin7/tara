@@ -174,7 +174,10 @@ export interface Market {
   closesAt: string | null;
   resolvedAt: string | null;
   proposedOutcomeId: string | null;
+  resolvedOutcomeId: string | null;
   disputeDeadlineAt: string | null;
+  resolutionCriteria: string | null;
+  category: string | null;
   createdAt: string;
   outcomes: Outcome[];
 }
@@ -216,6 +219,27 @@ export function getMarkets(q?: string): Promise<Market[]> {
 
 export function getMarket(id: string): Promise<Market> {
   return request<Market>(`/markets/${id}`);
+}
+
+export interface ResolvedMarket {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  category: string | null;
+  status: "resolved" | "settled";
+  totalPool: number;
+  resolutionCriteria: string | null;
+  createdAt: string;
+  opensAt: string | null;
+  closesAt: string | null;
+  resolvedAt: string | null;
+  participantCount: number;
+  winner: { id: string; label: string } | null;
+}
+
+export function getResolvedMarkets(): Promise<ResolvedMarket[]> {
+  return request<ResolvedMarket[]>("/markets/resolved");
 }
 
 // ─── Bets ─────────────────────────────────────────────────────────────────────

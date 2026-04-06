@@ -76,6 +76,10 @@ export const MarketDetailPage: FC = () => {
   }
 
   const isResolving = market.status === "resolving";
+  const isResolved = market.status === "resolved" || market.status === "settled";
+  const resolvedOutcome = isResolved && market.resolvedOutcomeId
+    ? market.outcomes.find((o) => o.id === market.resolvedOutcomeId)
+    : null;
 
   const proposedOutcome = isResolving && market.proposedOutcomeId
     ? market.outcomes.find((o) => o.id === market.proposedOutcomeId)
@@ -114,6 +118,50 @@ export const MarketDetailPage: FC = () => {
               <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", lineHeight: 1.5, marginTop: 16, fontWeight: 500 }}>{market.description}</p>
             )}
           </div>
+
+          {/* Timeline */}
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "20px", boxShadow: "var(--shadow-premium)" }}>
+            <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Timeline</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { label: "Created", date: market.createdAt },
+                { label: "Opens", date: market.opensAt },
+                { label: "Closes", date: market.closesAt },
+                ...(market.resolvedAt ? [{ label: "Resolved", date: market.resolvedAt }] : []),
+              ].map(({ label, date }) =>
+                date ? (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-subtle)" }}>{label}</span>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--text-main)" }}>
+                      {new Date(date).toLocaleString("en-BT", { timeZone: "Asia/Thimphu", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          </div>
+
+          {/* Resolution Criteria */}
+          {market.resolutionCriteria && (
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "20px", boxShadow: "var(--shadow-premium)" }}>
+              <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>How this resolves</div>
+              <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", lineHeight: 1.55, fontWeight: 500, margin: 0 }}>{market.resolutionCriteria}</p>
+            </div>
+          )}
+
+          {/* Resolved Winner Banner */}
+          {resolvedOutcome && (
+            <div style={{ background: "linear-gradient(0deg, #54c682ff, #54c682ff)", border: "1px solid #22c55e", borderRadius: "var(--radius-lg)", padding: "20px", boxShadow: "var(--shadow-premium)", display: "flex", alignItems: "center", gap: 14 }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#86efac" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="8" r="6" />
+                <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+              </svg>
+              <div>
+                <div style={{ fontSize: "0.65rem", fontWeight: 800, color: "#86efac", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>Resolved</div>
+                <div style={{ fontSize: "1.1rem", fontWeight: 900, color: "#fff" }}>{resolvedOutcome.label}</div>
+              </div>
+            </div>
+          )}
 
           {/* Betting Options */}
           {isOpen && (
@@ -185,7 +233,7 @@ export const MarketDetailPage: FC = () => {
                   <div style={{ fontWeight: 900, color: "#92400e", fontSize: "0.85rem", textTransform: "uppercase" }}>Dispute Window</div>
                   <div style={{ fontSize: "0.75rem", color: "#b45309", fontWeight: 700 }}>{disputeTimeLeft}</div>
                 </div>
-                <div style={{ fontSize: "1.5rem" }}>⚖️</div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3"/><path d="m3 9 2 2 2-2"/><path d="m17 9 2 2 2-2"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 21v-6"/><path d="M9 21h6"/></svg>
               </div>
               
               <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
