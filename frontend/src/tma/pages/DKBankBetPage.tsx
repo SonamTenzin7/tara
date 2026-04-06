@@ -79,6 +79,8 @@ export const DKBankBetPage: FC = () => {
   const betAmount = parseFloat(amount) || 0;
 
   let winAmount = 0;
+  let priceImpact: { from: number; to: number } | null = null;
+
   if (selectedOutcome && betAmount >= minBet) {
     const totalPool = Number(market.totalPool);
     const outcomePool = Number(selectedOutcome.totalBetAmount);
@@ -87,6 +89,25 @@ export const DKBankBetPage: FC = () => {
     const houseEdge = Number(market.houseEdgePct) / 100;
     if (newOutcomePool > 0) {
       winAmount = (betAmount / newOutcomePool) * newTotalPool * (1 - houseEdge);
+    }
+
+    // Price impact: LMSR softmax before and after this bet
+    const b = Number(market.liquidityParam) || 1000;
+    const shares = market.outcomes.map((o) => Number(o.totalBetAmount));
+    const newShares = shares.map((s, i) =>
+      market.outcomes[i].id === selectedOutcome.id ? s + betAmount : s
+    );
+    const lmsrProb = (vals: number[], idx: number) => {
+      const max = Math.max(...vals);
+      const exps = vals.map((v) => Math.exp((v - max) / b));
+      const total = exps.reduce((a, c) => a + c, 0);
+      return exps[idx] / total;
+    };
+    const selectedIdx = market.outcomes.findIndex((o) => o.id === selectedOutcome.id);
+    const before = lmsrProb(shares, selectedIdx);
+    const after = lmsrProb(newShares, selectedIdx);
+    if (Math.abs(after - before) >= 0.005) {
+      priceImpact = { from: before, to: after };
     }
   }
 
@@ -120,9 +141,11 @@ export const DKBankBetPage: FC = () => {
                 {market.outcomes.map((outcome, idx) => {
                   const isSelected = selectedOutcomeId === outcome.id;
                   const totalPool = Number(market.totalPool);
-                  const pct = totalPool > 0
-                    ? (Number(outcome.totalBetAmount) / totalPool) * 100
-                    : 100 / market.outcomes.length;
+                  const pct = (outcome.lmsrProbability != null && outcome.lmsrProbability > 0)
+                    ? outcome.lmsrProbability * 100
+                    : totalPool > 0
+                      ? (Number(outcome.totalBetAmount) / totalPool) * 100
+                      : 100 / market.outcomes.length;
                   const colors = ["#22c55e", "#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6"];
                   const color = colors[idx % colors.length];
                   return (
@@ -205,34 +228,55 @@ export const DKBankBetPage: FC = () => {
                 ))}
               </div>
 
-              {/* Win amount */}
+              {/* Win amount + price impact */}
               {winAmount > 0 && (
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "12px 14px",
-                  borderRadius: 10,
-                  background: "rgba(22,163,74,0.1)",
-                  border: "1px solid #86efac",
-                  marginTop: 12,
-                }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Est. payout if win
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 14px",
+                    borderRadius: 10,
+                    background: "rgba(22,163,74,0.1)",
+                    border: "1px solid #86efac",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Est. payout if win
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "#16a34a" }}>
+                        {formatBTN(winAmount)}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: "#16a34a" }}>
-                      {formatBTN(winAmount)}
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Outcome
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#16a34a" }}>
+                        {selectedOutcome?.label}
+                      </div>
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-subtle)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Outcome
+                  {priceImpact && (
+                    <div style={{
+                      padding: "8px 14px",
+                      borderRadius: 10,
+                      background: "rgba(59,130,246,0.08)",
+                      border: "1px solid rgba(59,130,246,0.25)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "var(--text-muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}>
+                      <span style={{ color: "#3b82f6" }}>↑</span>
+                      Your bet moves {selectedOutcome?.label} from{" "}
+                      <strong style={{ color: "var(--text-main)" }}>{Math.round(priceImpact.from * 100)}%</strong>
+                      {" → "}
+                      <strong style={{ color: "#3b82f6" }}>{Math.round(priceImpact.to * 100)}%</strong>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#16a34a" }}>
-                      {selectedOutcome?.label}
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

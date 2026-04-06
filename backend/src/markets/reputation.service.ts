@@ -167,12 +167,14 @@ export class ReputationService {
   async computeMarketSignal(
     marketId: string,
     outcomeIds: string[],
+    category?: string,
   ): Promise<Record<string, number>> {
     const rows = await this.betRepo
       .createQueryBuilder("b")
       .leftJoin("b.user", "u")
       .select("b.outcomeId", "outcomeId")
       .addSelect("u.reputationScore", "reputationScore")
+      .addSelect("u.categoryScores", "categoryScores")
       .addSelect("b.userId", "userId")
       .where("b.marketId = :marketId", { marketId })
       .andWhere("b.status IN (:...statuses)", {
@@ -184,13 +186,27 @@ export class ReputationService {
     const uniqueBettors = new Set(rows.map((r) => r.userId)).size;
     if (uniqueBettors < 3) return {};
 
+    // Deduplicate: one vote per user per outcome (last bet wins if multiple exist)
+    const userOutcomeMap: Record<string, { outcomeId: string; weight: number }> = {};
+    for (const row of rows) {
+      let weight = Number(row.reputationScore ?? 0.5);
+      if (category && row.categoryScores) {
+        const catScores = typeof row.categoryScores === "string"
+          ? JSON.parse(row.categoryScores)
+          : row.categoryScores;
+        const cat = catScores?.[category];
+        if (cat && cat.total >= 5) {
+          weight = this.adjustedScore(cat.correct, cat.total);
+        }
+      }
+      userOutcomeMap[row.userId] = { outcomeId: row.outcomeId, weight };
+    }
+
     const weightedSums: Record<string, number> = {};
     let totalWeight = 0;
 
-    for (const row of rows) {
-      // Pure accuracy signal: what fraction of accurate predictors picked each outcome?
-      const weight = Number(row.reputationScore ?? 0.5); // not multiplied by amount
-      weightedSums[row.outcomeId] = (weightedSums[row.outcomeId] || 0) + weight;
+    for (const { outcomeId, weight } of Object.values(userOutcomeMap)) {
+      weightedSums[outcomeId] = (weightedSums[outcomeId] || 0) + weight;
       totalWeight += weight;
     }
 

@@ -495,7 +495,7 @@ export const TmaFeedPage: FC = () => {
         {trendingMarkets.length > 0 && !searchQuery.trim() && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="#ef4444" stroke="none">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="#ff6f01ff" stroke="none">
                 <path d="M12 2c0 6-6 8-6 14a6 6 0 0 0 12 0c0-6-6-8-6-14z"/>
               </svg>
               Trending

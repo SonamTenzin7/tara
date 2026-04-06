@@ -156,7 +156,7 @@ export class MarketsService {
   private async attachSignal(market: Market): Promise<void> {
     if (!market.outcomes?.length || Number(market.totalPool) === 0) return;
     const ids = market.outcomes.map((o) => o.id);
-    const signal = await this.reputationService.computeMarketSignal(market.id, ids);
+    const signal = await this.reputationService.computeMarketSignal(market.id, ids, market.category);
     for (const outcome of market.outcomes) {
       (outcome as any).reputationSignal =
         signal[outcome.id] != null ? signal[outcome.id] : null;

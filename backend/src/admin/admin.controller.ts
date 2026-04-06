@@ -366,6 +366,8 @@ export class AdminController {
         "u.dkCid",
         "u.dkAccountNumber",
         "u.dkAccountName",
+        "u.reputationTier",
+        "u.totalPredictions",
         "u.createdAt",
         "u.updatedAt",
       ]);

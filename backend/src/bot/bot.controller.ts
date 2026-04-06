@@ -227,7 +227,11 @@ export class BotController {
       return;
     }
 
-    if (user.telegramPhoneHash && user.telegramLinkedAt) {
+    if (
+      user.telegramPhoneHash &&
+      user.dkPhoneHash &&
+      user.telegramPhoneHash === user.dkPhoneHash
+    ) {
       await this.telegramSimpleService.sendMessage(
         chatId,
         "✅ <b>Your phone is already verified!</b>\n\n" +

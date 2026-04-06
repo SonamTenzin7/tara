@@ -145,7 +145,11 @@ export const MarketDetailPage: FC = () => {
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {market.outcomes.map((outcome, idx) => {
                 const totalBets = Number(market.totalPool);
-                const pct = totalBets > 0 ? (Number(outcome.totalBetAmount) / totalBets) * 100 : 100 / market.outcomes.length;
+                const pct = (outcome.lmsrProbability != null && outcome.lmsrProbability > 0)
+                  ? outcome.lmsrProbability * 100
+                  : totalBets > 0
+                    ? (Number(outcome.totalBetAmount) / totalBets) * 100
+                    : 100 / market.outcomes.length;
                 const colors = ["#22c55e", "#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6"];
                 const color = colors[idx % colors.length];
                 
