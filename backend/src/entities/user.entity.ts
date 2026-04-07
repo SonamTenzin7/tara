@@ -103,6 +103,46 @@ export class User {
   @Column({ type: "jsonb", nullable: true })
   categoryScores: Record<string, { correct: number; total: number }> | null;
 
+  /**
+   * Brier score — measures calibration quality (lower = better, 0–1).
+   * Computed as rolling average of (predictedProbability - actual)² across
+   * all resolved predictions. Null until first prediction with a stored prob.
+   */
+  @Column({ type: "decimal", precision: 5, scale: 4, nullable: true })
+  brierScore: number | null;
+
+  /** Number of observations included in the rolling brierScore average. */
+  @Column({ default: 0 })
+  brierCount: number;
+
+  /**
+   * Timestamp of the user's most recent position placement.
+   * Used to compute time-based reputation decay.
+   */
+  @Column({ type: "timestamptz", nullable: true })
+  lastActiveAt: Date | null;
+
+  /**
+   * Number of times the user bet AGAINST the Expert-weighted signal
+   * and won. Incremented at settlement. Used for the Contrarian badge.
+   */
+  @Column({ default: 0 })
+  contrarianWins: number;
+
+  /**
+   * Number of times the user bet against the Expert-weighted signal
+   * (regardless of outcome). Denominator for contrarianWinRate.
+   */
+  @Column({ default: 0 })
+  contrarianAttempts: number;
+
+  /**
+   * Badge tier: null = no badge, 'bronze' = 3+, 'silver' = 7+, 'gold' = 15+ contrarian wins
+   * with win-rate ≥ 55%.
+   */
+  @Column({ type: "varchar", nullable: true })
+  contrarianBadge: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

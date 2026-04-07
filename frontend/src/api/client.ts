@@ -99,6 +99,12 @@ export interface AuthUser {
   totalPredictions?: number;
   correctPredictions?: number;
   categoryScores?: Record<string, { correct: number; total: number }> | null;
+  // Contrarian badge
+  contrarianBadge?: "bronze" | "silver" | "gold" | null;
+  contrarianWins?: number;
+  contrarianAttempts?: number;
+  // Win streak
+  telegramStreak?: number | null;
 }
 
 export interface AuthResponse {
@@ -148,9 +154,17 @@ export interface Outcome {
   totalBetAmount: string;
   currentOdds: string;
   lmsrProbability?: number;
-  reputationSignal?: number | null; // reputation-weighted probability (null = not enough data)
+  reputationSignal?: number | null;
+  intelligenceProb?: number | null;
   isWinner: boolean;
   marketId: string;
+}
+
+export interface SignalMeta {
+  participantCount: number;
+  reputationDepth: number;
+  maturityScore: number;
+  composite: number;
 }
 
 export interface Market {
@@ -178,6 +192,7 @@ export interface Market {
   disputeDeadlineAt: string | null;
   resolutionCriteria: string | null;
   category: string | null;
+  signalMeta: SignalMeta | null;
   createdAt: string;
   outcomes: Outcome[];
 }
@@ -200,6 +215,21 @@ export interface SubmitDisputePayload {
 
 export function getDisputes(marketId: string): Promise<Dispute[]> {
   return request<Dispute[]>(`/markets/${marketId}/disputes`);
+}
+
+export interface DisputeRequirements {
+  minBond: number;
+  minParticipants: number;
+  eligible: boolean;
+  reason: string | null;
+}
+
+export function getDisputeRequirements(
+  marketId: string,
+): Promise<DisputeRequirements> {
+  return request<DisputeRequirements>(
+    `/markets/${marketId}/dispute-requirements`,
+  );
 }
 
 export function submitDispute(

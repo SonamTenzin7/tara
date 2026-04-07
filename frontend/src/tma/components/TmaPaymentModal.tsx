@@ -36,7 +36,9 @@ export function TmaPaymentModal({
   onFailure,
 }: TmaPaymentModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<"dkbank" | null>(null);
-  const [amountStr, setAmountStr] = useState(() => initialAmount ? String(initialAmount) : "100");
+  const [amountStr, setAmountStr] = useState(() =>
+    initialAmount ? String(initialAmount) : "100",
+  );
   const [cidNumber, setCidNumber] = useState("");
   const [linkedCid, setLinkedCid] = useState<string | null>(null); // from user's profile
   const [customerName, setCustomerName] = useState("");
@@ -244,6 +246,11 @@ export function TmaPaymentModal({
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .pay-method-btn { transition: transform 0.12s ease, box-shadow 0.12s ease; }
+        .pay-method-btn:active { transform: scale(0.97); }
       `}</style>
 
       <div
@@ -417,8 +424,20 @@ export function TmaPaymentModal({
                   Verify OTP
                 </div>
                 <div style={{ display: "flex", alignItems: "center" }}>
-                  <div style={{ background: "#fff", borderRadius: 6, padding: "3px 8px", display: "inline-flex", alignItems: "center" }}>
-                    <img src={dkBankLogo} alt="DK Bank" style={{ height: 18, width: "auto" }} />
+                  <div
+                    style={{
+                      background: "#fff",
+                      borderRadius: 6,
+                      padding: "3px 8px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <img
+                      src={dkBankLogo}
+                      alt="DK Bank"
+                      style={{ height: 18, width: "auto" }}
+                    />
                   </div>
                 </div>
               </div>
@@ -442,7 +461,11 @@ export function TmaPaymentModal({
               </button>
             </div>
             <div
-              style={{ height: 1, background: "var(--glass-border)", marginBottom: 20 }}
+              style={{
+                height: 1,
+                background: "var(--glass-border)",
+                marginBottom: 20,
+              }}
             />
 
             <div style={{ textAlign: "center", marginBottom: 20 }}>
@@ -477,7 +500,9 @@ export function TmaPaymentModal({
                 boxSizing: "border-box",
                 padding: "16px",
                 borderRadius: 10,
-                border: error ? "2px solid #ef4444" : "2px solid var(--glass-border)",
+                border: error
+                  ? "2px solid #ef4444"
+                  : "2px solid var(--glass-border)",
                 background: "var(--bg-main)",
                 color: "var(--text-main)",
                 fontSize: 24,
@@ -507,7 +532,8 @@ export function TmaPaymentModal({
                 width: "100%",
                 padding: "14px",
                 marginTop: 16,
-                background: otpValue.length < 4 ? "var(--glass-border)" : "#3b82f6",
+                background:
+                  otpValue.length < 4 ? "var(--glass-border)" : "#3b82f6",
                 color: otpValue.length < 4 ? "var(--text-subtle)" : "#fff",
                 border: "none",
                 borderRadius: 10,
@@ -543,7 +569,14 @@ export function TmaPaymentModal({
 
         {/* ── Main form (idle / processing) ── */}
         {(status === "idle" || status === "processing") && (
-          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
             {/* Header */}
             <div
               style={{
@@ -630,374 +663,450 @@ export function TmaPaymentModal({
             </div>
 
             <div
-              style={{ height: 1, background: "var(--glass-border)", marginBottom: 16, flexShrink: 0 }}
+              style={{
+                height: 1,
+                background: "var(--glass-border)",
+                marginBottom: 16,
+                flexShrink: 0,
+              }}
             />
 
             {/* SCROLLABLE INNER CONTENT */}
-            <div style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingRight: 4, marginRight: -4 }}>
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                minHeight: 0,
+                paddingRight: 4,
+                marginRight: -4,
+              }}
+            >
               {/* Payment method */}
               <div
                 style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "var(--text-subtle)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 10,
-              }}
-            >
-              Pay with
-            </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              <button
-                onClick={() => setSelectedMethod("dkbank")}
-                style={{
-                  flex: 1,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  cursor: "pointer",
-                  border:
-                    selectedMethod === "dkbank"
-                      ? "2px solid #3b82f6"
-                      : "2px solid var(--glass-border)",
-                  background:
-                    selectedMethod === "dkbank" ? "rgba(59, 130, 246, 0.1)" : "var(--bg-main)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  textAlign: "left",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "var(--text-subtle)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  marginBottom: 10,
                 }}
               >
-                <div>
-                  <div style={{ background: "#fff", borderRadius: 5, padding: "2px 6px", display: "inline-flex", alignItems: "center", marginBottom: 3 }}>
-                    <img src={dkBankLogo} alt="DK Bank" style={{ height: 16, width: "auto" }} />
-                  </div>
+                Pay with
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                {/* DK Bank button */}
+                <button
+                  onClick={() => setSelectedMethod("dkbank")}
+                  className="pay-method-btn"
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    border:
+                      selectedMethod === "dkbank"
+                        ? "2px solid #2563eb"
+                        : "1.5px solid rgba(255,255,255,0.18)",
+                    background:
+                      selectedMethod === "dkbank"
+                        ? "rgba(37,99,235,0.15)"
+                        : "rgba(255,255,255,0.09)",
+                    boxShadow:
+                      selectedMethod === "dkbank"
+                        ? "0 0 0 3px rgba(37,99,235,0.2), 0 4px 14px rgba(37,99,235,0.35)"
+                        : "0 3px 8px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
                   <div
                     style={{
-                      fontSize: 11,
+                      background: "#fff",
+                      borderRadius: 5,
+                      padding: "2px 6px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <img
+                      src={dkBankLogo}
+                      alt="DK Bank"
+                      style={{ height: 16, width: "auto" }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
                       color:
-                        selectedMethod === "dkbank" ? "#60a5fa" : "var(--text-subtle)",
+                        selectedMethod === "dkbank"
+                          ? "#60a5fa"
+                          : "var(--text-muted)",
                     }}
                   >
                     BTN · Nu
-                  </div>
-                </div>
-              </button>
-              <div
-                style={{
-                  flex: 1,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "2px solid var(--glass-border)",
-                  background: "var(--bg-main)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  opacity: 0.45,
-                }}
-              >
-                <div>
+                  </span>
+                </button>
+
+                {/* TON Wallet — disabled */}
+                <div
+                  style={{
+                    flex: 1,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1.5px solid rgba(255, 255, 255, 1)",
+                    background: "rgba(255,255,255,0.09)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    opacity: 0.45,
+                    cursor: "not-allowed",
+                    boxShadow:
+                      "0 3px 8px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12)",
+                  }}
+                >
                   <div
-                    style={{ fontSize: 13, fontWeight: 700, color: "var(--text-subtle)" }}
+                    style={{
+                      width: 28,
+                      height: 22,
+                      borderRadius: 5,
+                      background: "linear-gradient(135deg, #00b4ed, #0088cc)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
                   >
-                    TON Wallet
+                    <svg width="13" height="13" viewBox="0 0 56 56" fill="none">
+                      <path
+                        d="M37.56 15.63H18.44c-3.52 0-5.74 3.79-3.97 6.86l11.8 20.45c.77 1.34 2.7 1.34 3.47 0l11.8-20.45c1.77-3.06-.46-6.86-3.98-6.86zm-11.3 21.18l-2.57-4.97-6.2-11.09c-.41-.71.09-1.62.95-1.62h7.82v17.68zm12.25-16.06l-6.2 11.09-2.57 4.97V19.12h7.82c.86 0 1.36.91.95 1.63z"
+                        fill="#fff"
+                      />
+                    </svg>
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--text-subtle)" }}>
-                    Coming soon
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      TON Wallet
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>
+                      Coming soon
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Amount + CID */}
-            {selectedMethod === "dkbank" && (
-              <>
-                <div
-                  style={{ height: 1, background: "var(--glass-border)", marginBottom: 16 }}
-                />
-
-                {/* Amount */}
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "var(--text-subtle)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    marginBottom: 8,
-                  }}
-                >
-                  Amount (Nu)
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                  {QUICK_AMOUNTS.map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => setAmountStr(q.toString())}
-                      style={{
-                        flex: 1,
-                        padding: "9px 0",
-                        borderRadius: 10,
-                        border:
-                          amountStr === q.toString()
-                            ? "2px solid #3b82f6"
-                            : "2px solid var(--glass-border)",
-                        background:
-                          amountStr === q.toString() ? "rgba(59, 130, 246, 0.1)" : "var(--bg-main)",
-                        color:
-                          amountStr === q.toString() ? "#3b82f6" : "var(--text-main)",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ position: "relative", marginBottom: 16 }}>
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: 13,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--text-subtle)",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    Nu
-                  </span>
-                  <input
-                    ref={inputRef}
-                    type="number"
-                    min={MIN_BET}
-                    value={amountStr}
-                    onChange={(e) => setAmountStr(e.target.value)}
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "12px 14px 12px 34px",
-                      borderRadius: 10,
-                      border:
-                        isValidAmount || !betAmount
-                          ? "2px solid var(--glass-border)"
-                          : "2px solid #fca5a5",
-                      fontSize: 15,
-                      fontWeight: 600,
-                      color: "var(--text-main)",
-                      background: "var(--bg-main)",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-
-                {/* Estimated payout */}
-                {isValidAmount && (
+              {/* Amount + CID */}
+              {selectedMethod === "dkbank" && (
+                <>
                   <div
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      background: estProfit >= 0 ? "rgba(22, 163, 74, 0.1)" : "var(--bg-main)",
-                      border: `1px solid ${estProfit >= 0 ? "#86efac" : "var(--glass-border)"}`,
-                      borderRadius: 10,
-                      padding: "10px 14px",
+                      height: 1,
+                      background: "var(--glass-border)",
                       marginBottom: 16,
                     }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "var(--text-subtle)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
-                        Est. payout if win
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 18,
-                          fontWeight: 800,
-                          color: estProfit >= 0 ? "#16a34a" : "var(--text-muted)",
-                        }}
-                      >
-                        {estProfit >= 0 ? `Nu ${estPayout.toFixed(2)}` : "—"}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "var(--text-subtle)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
-                        Est. profit
-                      </div>
-                      {estProfit >= 0 ? (
-                        <div
-                          style={{
-                            fontSize: 15,
-                            fontWeight: 700,
-                            color: "#16a34a",
-                          }}
-                        >
-                          +Nu {estProfit.toFixed(2)}
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "var(--text-subtle)",
-                            maxWidth: 120,
-                            textAlign: "right",
-                          }}
-                        >
-                          Grows as more bets join
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Payout breakdown */}
-                {isValidAmount && (
-                  <PayoutBreakdown
-                    market={market}
-                    outcomeId={outcomeId}
-                    betAmount={betAmount}
                   />
-                )}
 
-                {/* CID — locked to user's linked account */}
-                <div style={{ marginBottom: 12, marginTop: 16 }}>
-                  <label
+                  {/* Amount */}
+                  <div
                     style={{
-                      display: "block",
                       fontSize: 11,
                       fontWeight: 700,
                       color: "var(--text-subtle)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
-                      marginBottom: 6,
+                      marginBottom: 8,
                     }}
                   >
-                    CID Number {linkedCid ? "🔒" : "*"}
-                  </label>
-                  {linkedCid ? (
-                    <div
-                      style={{
-                        width: "100%",
-                        boxSizing: "border-box",
-                        padding: "12px 14px",
-                        borderRadius: 10,
-                        border: "2px solid rgba(22, 163, 74, 0.3)",
-                        fontSize: 15,
-                        fontWeight: 600,
-                        color: "#10b981",
-                        background: "rgba(22, 163, 74, 0.1)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span
-                        style={{ fontFamily: "monospace", letterSpacing: 2 }}
-                      >
-                        {linkedCid}
-                      </span>
-                      <span
+                    Amount (Nu)
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                    {QUICK_AMOUNTS.map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => setAmountStr(q.toString())}
+                        className="tma-outcome-btn"
                         style={{
-                          fontSize: 11,
-                          color: "#16a34a",
+                          flex: 1,
+                          padding: "10px 0",
+                          borderRadius: 12,
+                          border:
+                            amountStr === q.toString()
+                              ? "2px solid #3b82f6"
+                              : "1px solid var(--border)",
+                          borderBottomWidth: 2,
+                          background:
+                            amountStr === q.toString()
+                              ? "rgba(59, 130, 246, 0.1)"
+                              : "var(--bg-secondary)",
+                          color:
+                            amountStr === q.toString()
+                              ? "#3b82f6"
+                              : "var(--text-main)",
+                          fontSize: 13,
                           fontWeight: 700,
+                          cursor: "pointer",
                         }}
                       >
-                        Your account ✓
-                      </span>
-                    </div>
-                  ) : (
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ position: "relative", marginBottom: 16 }}>
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: 13,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "var(--text-subtle)",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      Nu
+                    </span>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      value={cidNumber}
-                      onChange={(e) =>
-                        setCidNumber(
-                          e.target.value.replace(/\D/g, "").slice(0, 11),
-                        )
-                      }
-                      placeholder="11-digit CID"
+                      ref={inputRef}
+                      type="number"
+                      min={MIN_BET}
+                      value={amountStr}
+                      onChange={(e) => setAmountStr(e.target.value)}
                       style={{
                         width: "100%",
                         boxSizing: "border-box",
-                        padding: "12px 14px",
+                        padding: "12px 14px 12px 34px",
                         borderRadius: 10,
-                        border: "2px solid rgba(239, 68, 68, 0.5)",
+                        border:
+                          isValidAmount || !betAmount
+                            ? "2px solid var(--glass-border)"
+                            : "2px solid #fca5a5",
                         fontSize: 15,
                         fontWeight: 600,
                         color: "var(--text-main)",
-                        background: "rgba(239, 68, 68, 0.05)",
+                        background: "var(--bg-main)",
                         outline: "none",
                       }}
                     />
-                  )}
-                  {!linkedCid && (
-                    <p
+                  </div>
+
+                  {/* Estimated payout */}
+                  {isValidAmount && (
+                    <div
                       style={{
-                        margin: "6px 0 0",
-                        fontSize: 12,
-                        color: "#ef4444",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        background:
+                          estProfit >= 0
+                            ? "rgba(22, 163, 74, 0.1)"
+                            : "var(--bg-main)",
+                        border: `1px solid ${estProfit >= 0 ? "#86efac" : "var(--glass-border)"}`,
+                        borderRadius: 10,
+                        padding: "10px 14px",
+                        marginBottom: 16,
                       }}
                     >
-                      ⚠️ No DK Bank account linked. Go to Profile → Link DK Bank
-                      Account first.
-                    </p>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "var(--text-subtle)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          Est. payout if win
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 18,
+                            fontWeight: 800,
+                            color:
+                              estProfit >= 0 ? "#16a34a" : "var(--text-muted)",
+                          }}
+                        >
+                          {estProfit >= 0 ? `Nu ${estPayout.toFixed(2)}` : "—"}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "var(--text-subtle)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          Est. profit
+                        </div>
+                        {estProfit >= 0 ? (
+                          <div
+                            style={{
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color: "#16a34a",
+                            }}
+                          >
+                            +Nu {estProfit.toFixed(2)}
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "var(--text-subtle)",
+                              maxWidth: 120,
+                              textAlign: "right",
+                            }}
+                          >
+                            Grows as more bets join
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
-                </div>
-                <div style={{ marginBottom: 20 }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: "var(--text-subtle)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Your name"
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "12px 14px",
-                      borderRadius: 10,
-                      border: "2px solid var(--glass-border)",
-                      fontSize: 15,
-                      fontWeight: 600,
-                      color: "var(--text-main)",
-                      background: "var(--bg-main)",
-                      outline: "none",
-                    }}
-                  />
-                </div>
-              </>
-            )}
 
+                  {/* Payout breakdown */}
+                  {isValidAmount && (
+                    <PayoutBreakdown
+                      market={market}
+                      outcomeId={outcomeId}
+                      betAmount={betAmount}
+                    />
+                  )}
+
+                  {/* CID — locked to user's linked account */}
+                  <div style={{ marginBottom: 12, marginTop: 16 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--text-subtle)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
+                        marginBottom: 6,
+                      }}
+                    >
+                      CID Number {linkedCid ? "🔒" : "*"}
+                    </label>
+                    {linkedCid ? (
+                      <div
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "12px 14px",
+                          borderRadius: 10,
+                          border: "2px solid rgba(22, 163, 74, 0.3)",
+                          fontSize: 15,
+                          fontWeight: 600,
+                          color: "#10b981",
+                          background: "rgba(22, 163, 74, 0.1)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{ fontFamily: "monospace", letterSpacing: 2 }}
+                        >
+                          {linkedCid}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#16a34a",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Your account ✓
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={cidNumber}
+                        onChange={(e) =>
+                          setCidNumber(
+                            e.target.value.replace(/\D/g, "").slice(0, 11),
+                          )
+                        }
+                        placeholder="11-digit CID"
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "12px 14px",
+                          borderRadius: 10,
+                          border: "2px solid rgba(239, 68, 68, 0.5)",
+                          fontSize: 15,
+                          fontWeight: 600,
+                          color: "var(--text-main)",
+                          background: "rgba(239, 68, 68, 0.05)",
+                          outline: "none",
+                        }}
+                      />
+                    )}
+                    {!linkedCid && (
+                      <p
+                        style={{
+                          margin: "6px 0 0",
+                          fontSize: 12,
+                          color: "#ef4444",
+                        }}
+                      >
+                        ⚠️ No DK Bank account linked. Go to Profile → Link DK
+                        Bank Account first.
+                      </p>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 20 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--text-subtle)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
+                        marginBottom: 6,
+                      }}
+                    >
+                      Name (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Your name"
+                      style={{
+                        width: "100%",
+                        boxSizing: "border-box",
+                        padding: "12px 14px",
+                        borderRadius: 10,
+                        border: "2px solid var(--glass-border)",
+                        fontSize: 15,
+                        fontWeight: 600,
+                        color: "var(--text-main)",
+                        background: "var(--bg-main)",
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* FIXED FOOTER */}
@@ -1024,28 +1133,77 @@ export function TmaPaymentModal({
                 disabled={!canPay}
                 style={{
                   width: "100%",
-                  padding: "14px",
-                  background: canPay ? "#3b82f6" : "var(--glass-border)",
+                  padding: "16px",
+                  background: canPay
+                    ? "linear-gradient(135deg, #2563eb, #1d4ed8)"
+                    : "var(--glass-border)",
                   color: canPay ? "#fff" : "var(--text-subtle)",
                   border: "none",
-                  borderRadius: 10,
+                  borderRadius: 12,
                   fontSize: 15,
-                  fontWeight: 700,
+                  fontWeight: 800,
                   cursor: canPay ? "pointer" : "not-allowed",
+                  boxShadow: canPay ? "0 4px 14px rgba(37,99,235,0.4)" : "none",
+                  transition: "all 0.15s ease",
+                  letterSpacing: "0.01em",
                 }}
               >
-                {status === "processing"
-                  ? "Processing…"
-                  : canPay
-                    ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-                        Pay {formatBTN(betAmount)} with
-                        <span style={{ background: "#fff", borderRadius: 4, padding: "1px 5px", display: "inline-flex", alignItems: "center" }}>
-                          <img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto" }} />
-                        </span>
-                      </span>
-                    : !isValidAmount
-                      ? `Min Nu ${MIN_BET}`
-                      : "Enter CID to continue"}
+                {status === "processing" ? (
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ animation: "spin 0.8s linear infinite" }}
+                    >
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    Processing…
+                  </span>
+                ) : canPay ? (
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                    }}
+                  >
+                    Pay {formatBTN(betAmount)} with
+                    <span
+                      style={{
+                        background: "#fff",
+                        borderRadius: 5,
+                        padding: "2px 8px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                      }}
+                    >
+                      <img
+                        src={dkBankLogo}
+                        alt="DK Bank"
+                        style={{ height: 15, width: "auto" }}
+                      />
+                    </span>
+                  </span>
+                ) : !isValidAmount ? (
+                  `Min Nu ${MIN_BET}`
+                ) : !selectedMethod ? (
+                  "Select payment method above"
+                ) : null}
               </button>
             </div>
           </div>

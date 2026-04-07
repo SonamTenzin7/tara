@@ -180,7 +180,9 @@ export const TmaProfilePage: FC = () => {
     <Page>
       <div style={styles.container}>
         {/* Top Header Layer: Toggles */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8 }}>
+        <div
+          style={{ display: "flex", justifyContent: "flex-end", paddingTop: 8 }}
+        >
           <ThemeToggle />
         </div>
 
@@ -228,7 +230,17 @@ export const TmaProfilePage: FC = () => {
             {/* ── Status badges ──────────────────────────────────── */}
             <div style={styles.badgeRow}>
               <StatusBadge
-                label={<img src={dkBankLogo} alt="DK Bank" style={{ height: 13, width: "auto", mixBlendMode: "multiply" }} />}
+                label={
+                  <img
+                    src={dkBankLogo}
+                    alt="DK Bank"
+                    style={{
+                      height: 13,
+                      width: "auto",
+                      mixBlendMode: "multiply",
+                    }}
+                  />
+                }
                 active={hasDKBank}
                 activeText={user?.dkAccountName || user?.dkCid || "Linked"}
                 inactiveText="Not linked"
@@ -250,53 +262,104 @@ export const TmaProfilePage: FC = () => {
                 </span>
               </h3>
               {(user?.totalPredictions ?? 0) === 0 ? (
-                <div style={{ fontSize: 13, color: "var(--text-subtle)", lineHeight: 1.5 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text-subtle)",
+                    lineHeight: 1.5,
+                  }}
+                >
                   <p style={{ margin: "0 0 8px" }}>
-                    Make your first prediction to start building your reputation score.
+                    Make your first prediction to start building your reputation
+                    score.
                   </p>
-                  <p style={{ margin: 0, fontSize: 12, color: "var(--text-subtle)" }}>
-                    Top predictors earn an Expert badge and their predictions carry
-                    more weight in market probabilities.
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      color: "var(--text-subtle)",
+                    }}
+                  >
+                    Top predictors earn an Expert badge and their predictions
+                    carry more weight in market probabilities.
                   </p>
                 </div>
               ) : (
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <span style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "2px 10px",
-                      borderRadius: 99,
-                      background:
-                        user?.reputationTier === "expert" ? "#fef3c7" :
-                        user?.reputationTier === "reliable" ? "#d1fae5" :
-                        user?.reputationTier === "regular" ? "#dbeafe" : "#f3f4f6",
-                      color:
-                        user?.reputationTier === "expert" ? "#92400e" :
-                        user?.reputationTier === "reliable" ? "#065f46" :
-                        user?.reputationTier === "regular" ? "#1e40af" : "#374151",
-                      textTransform: "capitalize",
-                    }}>
-                      {user?.reputationTier === "expert" ? "Expert" :
-                       user?.reputationTier === "reliable" ? "Reliable" :
-                       user?.reputationTier === "regular" ? "Regular" : "Newcomer"}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: "2px 10px",
+                        borderRadius: 99,
+                        background:
+                          user?.reputationTier === "expert"
+                            ? "#fef3c7"
+                            : user?.reputationTier === "reliable"
+                              ? "#d1fae5"
+                              : user?.reputationTier === "regular"
+                                ? "#dbeafe"
+                                : "#f3f4f6",
+                        color:
+                          user?.reputationTier === "expert"
+                            ? "#92400e"
+                            : user?.reputationTier === "reliable"
+                              ? "#065f46"
+                              : user?.reputationTier === "regular"
+                                ? "#1e40af"
+                                : "#374151",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {user?.reputationTier === "expert"
+                        ? "Expert"
+                        : user?.reputationTier === "reliable"
+                          ? "Reliable"
+                          : user?.reputationTier === "regular"
+                            ? "Regular"
+                            : "Newcomer"}
                     </span>
                     {user?.reputationScore != null && (
-                      <span style={{ fontSize: 13, color: "var(--text-subtle)" }} title="Confidence-adjusted score — grows more accurate as you make more predictions">
-                        {Math.round(user.reputationScore * 100)}% confidence score
+                      <span
+                        style={{ fontSize: 13, color: "var(--text-subtle)" }}
+                        title="Confidence-adjusted score — grows more accurate as you make more predictions"
+                      >
+                        {Math.round(user.reputationScore * 100)}% confidence
+                        score
                       </span>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: 20, fontSize: 12, color: "var(--text-subtle)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 20,
+                      fontSize: 12,
+                      color: "var(--text-subtle)",
+                    }}
+                  >
                     <span>
-                      <strong style={{ color: "var(--text-primary)", fontSize: 14 }}>
+                      <strong
+                        style={{ color: "var(--text-primary)", fontSize: 14 }}
+                      >
                         {user?.totalPredictions ?? 0}
-                      </strong>{" "}predictions
+                      </strong>{" "}
+                      predictions
                     </span>
                     <span>
-                      <strong style={{ color: "var(--text-primary)", fontSize: 14 }}>
+                      <strong
+                        style={{ color: "var(--text-primary)", fontSize: 14 }}
+                      >
                         {user?.correctPredictions ?? 0}
-                      </strong>{" "}correct
+                      </strong>{" "}
+                      correct
                     </span>
                   </div>
                 </div>
@@ -313,14 +376,48 @@ export const TmaProfilePage: FC = () => {
                     <Link2 size={16} color="#2775d0" />
                   )}
                   {hasDKBank ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ background: "#fff", borderRadius: 4, padding: "1px 5px", display: "inline-flex", alignItems: "center" }}><img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto" }} /></span>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          background: "#fff",
+                          borderRadius: 4,
+                          padding: "1px 5px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <img
+                          src={dkBankLogo}
+                          alt="DK Bank"
+                          style={{ height: 14, width: "auto" }}
+                        />
+                      </span>
                       Linked
                     </span>
                   ) : (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
                       Link
-                      <img src={dkBankLogo} alt="DK Bank" style={{ height: 14, width: "auto", mixBlendMode: "multiply" }} />
+                      <img
+                        src={dkBankLogo}
+                        alt="DK Bank"
+                        style={{
+                          height: 14,
+                          width: "auto",
+                          mixBlendMode: "multiply",
+                        }}
+                      />
                       Account
                     </span>
                   )}
@@ -348,7 +445,9 @@ export const TmaProfilePage: FC = () => {
                           Registered
                         </>
                       ) : (
-                        <span style={{ color: "#d97706", ...styles.inlineIcon }}>
+                        <span
+                          style={{ color: "#d97706", ...styles.inlineIcon }}
+                        >
                           <AlertCircle size={13} color="#d97706" />
                           No phone on DK Bank record
                         </span>
@@ -385,8 +484,22 @@ export const TmaProfilePage: FC = () => {
                   {step === "success" && (
                     <p style={{ ...styles.success, ...styles.inlineIcon }}>
                       <CheckCircle2 size={14} color="#059669" />
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                        <img src={dkBankLogo} alt="DK Bank" style={{ height: 13, width: "auto", mixBlendMode: "multiply" }} />
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                        }}
+                      >
+                        <img
+                          src={dkBankLogo}
+                          alt="DK Bank"
+                          style={{
+                            height: 13,
+                            width: "auto",
+                            mixBlendMode: "multiply",
+                          }}
+                        />
                         account linked
                       </span>
                       {linkedName ? ` as ${linkedName}` : ""}!
@@ -413,9 +526,23 @@ export const TmaProfilePage: FC = () => {
                       ) : (
                         <>
                           <Link2 size={15} />
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
                             Link
-                            <img src={dkBankLogo} alt="DK Bank" style={{ height: 13, width: "auto", mixBlendMode: "multiply" }} />
+                            <img
+                              src={dkBankLogo}
+                              alt="DK Bank"
+                              style={{
+                                height: 13,
+                                width: "auto",
+                                mixBlendMode: "multiply",
+                              }}
+                            />
                             Account
                           </span>
                         </>
@@ -746,10 +873,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tabBar: {
     display: "flex",
-    background: "var(--bg-card)",
+    background: "rgba(0,0,0,0.08)",
     borderRadius: 12,
     padding: 4,
     gap: 4,
+    border: "1px solid var(--glass-border)",
   },
   tab: {
     flex: 1,
@@ -757,19 +885,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 600,
     border: "none",
-    borderRadius: 10,
+    borderRadius: 9,
     background: "transparent",
     color: "var(--text-muted)",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    transition: "all 0.2s",
+    transition: "all 0.18s ease",
   },
   tabActive: {
-    background: "var(--bg-main)",
-    color: "#2775d0",
-    boxShadow: "var(--shadow-sm)",
+    background: "linear-gradient(135deg, #4d87c9ff, #3874c8ff)",
+    color: "#fff",
+    boxShadow: "0 2px 8px rgba(253, 254, 255, 0.4)",
   },
   badgeRow: {
     display: "flex",

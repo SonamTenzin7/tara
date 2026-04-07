@@ -3,7 +3,7 @@ import dkBankLogo from "../../../assets/dk blue.png";
 import { useParams } from "react-router-dom";
 import { Spinner, Placeholder } from "@telegram-apps/telegram-ui";
 import { Page } from "@/tma/components/Page";
-import { getMarket, getDisputes, submitDispute, Market, Dispute } from "@/api/client";
+import { getMarket, getDisputes, submitDispute, getDisputeRequirements, Market, Dispute, DisputeRequirements } from "@/api/client";
 import { Link } from "@/tma/components/Link/Link";
 
 export const MarketDetailPage: FC = () => {
@@ -12,6 +12,7 @@ export const MarketDetailPage: FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [, setDisputes] = useState<Dispute[]>([]);
+  const [disputeReqs, setDisputeReqs] = useState<DisputeRequirements | null>(null);
   const [bondAmount, setBondAmount] = useState("10");
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
@@ -36,12 +37,17 @@ export const MarketDetailPage: FC = () => {
   useEffect(() => {
     if (!id || !market || market.status !== "resolving") return;
     getDisputes(id).then(setDisputes).catch(() => {});
+    getDisputeRequirements(id).then((reqs) => {
+      setDisputeReqs(reqs);
+      setBondAmount(String(reqs.minBond));
+    }).catch(() => {});
   }, [id, market?.status]);
 
   const handleSubmitDispute = async () => {
     if (!id) return;
     const amount = parseFloat(bondAmount);
-    if (!amount || amount < 1) { setDisputeError("Minimum bond is 1 credit."); return; }
+    const minBond = disputeReqs?.minBond ?? 10;
+    if (!amount || amount < minBond) { setDisputeError(`Minimum bond is Nu ${minBond}.`); return; }
     setDisputeSubmitting(true);
     setDisputeError(null);
     try {
@@ -189,24 +195,68 @@ export const MarketDetailPage: FC = () => {
 
           {/* Outcomes */}
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "20px", boxShadow: "var(--shadow-premium)" }}>
-            <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 20 }}>Outcomes</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Outcomes</div>
+              {(() => {
+                const meta = (market as any).signalMeta;
+                if (!meta || meta.composite === 0) return null;
+                const c = meta.composite as number;
+                const pct = Math.round(c * 100);
+                // colour: red < 30, amber 30-60, green > 60
+                const col = c >= 0.6 ? "#22c55e" : c >= 0.3 ? "#f59e0b" : "#ef4444";
+                const label = c >= 0.6 ? "High" : c >= 0.3 ? "Moderate" : "Low";
+                // Arc SVG: r=7, cx=cy=9, circumference≈43.98, filled portion = pct/100 * 43.98
+                const r = 7, circ = 2 * Math.PI * r;
+                const dash = (c * circ).toFixed(2);
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }} title={`Participants: ${meta.participantCount} · Reputation depth: ${Math.round(meta.reputationDepth * 100)}% · Maturity: ${Math.round(meta.maturityScore * 100)}%`}>
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                      <circle cx="9" cy="9" r={r} fill="none" stroke="var(--bg-secondary)" strokeWidth="2.5" />
+                      <circle cx="9" cy="9" r={r} fill="none" stroke={col} strokeWidth="2.5"
+                        strokeDasharray={`${dash} ${circ}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 9 9)" />
+                    </svg>
+                    <span style={{ fontSize: "0.68rem", fontWeight: 800, color: col, letterSpacing: "0.04em" }}>
+                      {label} confidence · {pct}%
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {market.outcomes.map((outcome, idx) => {
                 const totalBets = Number(market.totalPool);
-                const pct = (outcome.lmsrProbability != null && outcome.lmsrProbability > 0)
+                // Priority: intelligenceProb (rep-weighted LMSR) → lmsrProbability → raw pool ratio
+                const pct = (outcome.intelligenceProb != null && outcome.intelligenceProb > 0)
+                  ? outcome.intelligenceProb * 100
+                  : (outcome.lmsrProbability != null && outcome.lmsrProbability > 0)
+                    ? outcome.lmsrProbability * 100
+                    : totalBets > 0
+                      ? (Number(outcome.totalBetAmount) / totalBets) * 100
+                      : 100 / market.outcomes.length;
+                // Raw LMSR for delta display (crowd money)
+                const rawPct = (outcome.lmsrProbability != null && outcome.lmsrProbability > 0)
                   ? outcome.lmsrProbability * 100
-                  : totalBets > 0
-                    ? (Number(outcome.totalBetAmount) / totalBets) * 100
-                    : 100 / market.outcomes.length;
+                  : null;
+                const delta = outcome.intelligenceProb != null && rawPct != null
+                  ? Math.round(outcome.intelligenceProb * 100) - Math.round(rawPct)
+                  : null;
                 const colors = ["#22c55e", "#ef4444", "#f59e0b", "#3b82f6", "#8b5cf6"];
                 const color = colors[idx % colors.length];
-                
                 const signal = outcome.reputationSignal;
                 return (
                   <div key={outcome.id}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                       <span style={{ fontWeight: 800, color: "var(--text-main)", fontSize: "0.95rem" }}>{outcome.label}</span>
-                      <span style={{ fontWeight: 900, color: color, fontSize: "0.95rem" }}>{pct.toFixed(0)}%</span>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                        {delta !== null && delta !== 0 && (
+                          <span style={{ fontSize: "0.65rem", fontWeight: 700, color: delta > 0 ? "#22c55e" : "#ef4444" }}>
+                            {delta > 0 ? "+" : ""}{delta}%
+                          </span>
+                        )}
+                        <span style={{ fontWeight: 900, color: color, fontSize: "0.95rem" }}>{pct.toFixed(0)}%</span>
+                      </div>
                     </div>
                     <div style={{ background: "var(--bg-secondary)", height: 8, borderRadius: 10, overflow: "hidden" }}>
                       <div style={{ background: color, width: `${pct}%`, height: "100%", borderRadius: 10, transition: "width 1s" }} />
@@ -240,32 +290,53 @@ export const MarketDetailPage: FC = () => {
                 <div style={{ fontSize: "0.85rem", color: "#b45309", fontWeight: 600 }}>
                   Proposed: <strong style={{ color: "#b45309", fontSize: "1rem" }}>{proposedOutcome?.label ?? "Pending"}</strong>
                 </div>
-                
+
+                {/* Ineligibility notice */}
+                {disputeReqs && !disputeReqs.eligible && (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span style={{ fontSize: "0.78rem", color: "#b91c1c", fontWeight: 700 }}>{disputeReqs.reason}</span>
+                  </div>
+                )}
+
                 {disputeSuccess ? (
-                  <div style={{ background: "#ecfdf5", padding: "12px", borderRadius: 10, color: "#065f46", fontSize: "0.85rem", fontWeight: 700, textAlign: "center" }}>
-                    ✅ Dispute Submitted
+                  <div style={{ background: "#ecfdf5", padding: "12px", borderRadius: 10, color: "#065f46", fontSize: "0.85rem", fontWeight: 700, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#065f46" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    Dispute Submitted
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <input
-                      type="number"
-                      value={bondAmount}
-                      onChange={(e) => setBondAmount(e.target.value)}
-                      placeholder="Bond (Nu)"
-                      style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #fde68a", fontSize: "0.9rem", fontWeight: 700, outline: "none" }}
-                    />
+                    <div>
+                      <input
+                        type="number"
+                        value={bondAmount}
+                        onChange={(e) => setBondAmount(e.target.value)}
+                        min={disputeReqs?.minBond ?? 10}
+                        placeholder={`Bond (min Nu ${disputeReqs?.minBond ?? 10})`}
+                        disabled={disputeReqs != null && !disputeReqs.eligible}
+                        style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #fde68a", fontSize: "0.9rem", fontWeight: 700, outline: "none", boxSizing: "border-box" }}
+                      />
+                      {disputeReqs && (
+                        <div style={{ fontSize: "0.7rem", color: "#b45309", fontWeight: 600, marginTop: 4 }}>
+                          Min bond: Nu {disputeReqs.minBond} · requires {disputeReqs.minParticipants} participants
+                        </div>
+                      )}
+                    </div>
                     <textarea
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
                       placeholder="Reason (optional)"
                       rows={2}
+                      disabled={disputeReqs != null && !disputeReqs.eligible}
                       style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #fde68a", fontSize: "0.9rem", outline: "none", resize: "none" }}
                     />
                     {disputeError && <div style={{ color: "#ef4444", fontSize: "0.75rem", fontWeight: 700 }}>{disputeError}</div>}
                     <button
                       onClick={handleSubmitDispute}
-                      disabled={disputeSubmitting}
-                      style={{ width: "100%", padding: "14px", borderRadius: 12, background: "#f59e0b", color: "#fff", fontWeight: 900, border: "none" }}
+                      disabled={disputeSubmitting || (disputeReqs != null && !disputeReqs.eligible)}
+                      style={{ width: "100%", padding: "14px", borderRadius: 12, background: disputeReqs && !disputeReqs.eligible ? "#d1d5db" : "#f59e0b", color: "#fff", fontWeight: 900, border: "none", cursor: disputeReqs && !disputeReqs.eligible ? "not-allowed" : "pointer" }}
                     >
                       {disputeSubmitting ? "SUBMITTING..." : "SUBMIT DISPUTE"}
                     </button>

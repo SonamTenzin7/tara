@@ -39,6 +39,13 @@ export class Position {
   @Column({ type: "decimal", precision: 18, scale: 2, nullable: true })
   payout: number;
 
+  /**
+   * LMSR probability of the chosen outcome at the moment of bet placement.
+   * Stored for Brier score calibration tracking on settlement.
+   */
+  @Column({ type: "decimal", precision: 10, scale: 6, nullable: true })
+  predictedProbability: number | null;
+
   @CreateDateColumn()
   placedAt: Date;
 

@@ -81,6 +81,13 @@ export class MarketsController {
     return this.marketsService.getDisputesByMarket(id);
   }
 
+  @Get(":id/dispute-requirements")
+  @Public()
+  @ApiOperation({ summary: "Get minimum bond and eligibility for raising a dispute" })
+  getDisputeRequirements(@Param("id") id: string) {
+    return this.marketsService.getDisputeRequirements(id);
+  }
+
   @Post(":id/disputes")
   @ApiOperation({
     summary: "Submit a dispute bond during the 24h resolution window",

@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // ============================================================
 //   APP CONFIGURATION
 // ============================================================
@@ -12,8 +13,8 @@ const config = {
   // ----------------------------------------------------------
   // TELEGRAM BOT
   // ----------------------------------------------------------
-  botUsername: "Tara_parimutuel_bot",
-  botToken: "8689268702:AAEW70VsF9M98SAPz4YM9bs-0GJWHxaacaM",
+  botUsername: import.meta.env.VITE_BOT_USERNAME ?? "Tara_parimutuel_bot",
+  botToken: import.meta.env.VITE_BOT_TOKEN ?? "",
 
   // ----------------------------------------------------------
   // DEPLOYMENT URL

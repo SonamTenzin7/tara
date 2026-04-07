@@ -1,7 +1,7 @@
 import { FC, useState, useEffect } from "react";
 import { Spinner } from "@telegram-apps/telegram-ui";
 import { Page } from "@/tma/components/Page";
-import { getMarkets, placeBet, type Market } from "@/api/client";
+import { getMarkets, getMyBets, placeBet, type Market } from "@/api/client";
 import { useAuth } from "@/tma/hooks/useAuth";
 import { TmaPaymentModal } from "@/tma/components/TmaPaymentModal";
 import { Link } from "@/tma/components/Link/Link";
@@ -45,9 +45,12 @@ function useCountdown(targetAt: string | null): string {
 function MarketCard({
   market,
   onBet,
+  hasBet,
 }: {
   market: Market;
   onBet: (outcomeId: string) => void;
+  /** True when the current user already has a position in this market */
+  hasBet: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
   const isUpcoming = market.status === "upcoming";
@@ -60,11 +63,16 @@ function MarketCard({
   const sentiment = (() => {
     const raw = market.outcomes.map((o) => ({
       ...o,
-      pct: (o.lmsrProbability != null && o.lmsrProbability > 0)
-        ? o.lmsrProbability * 100
-        : totalPool > 0
-          ? (Number(o.totalBetAmount) / totalPool) * 100
-          : 100 / market.outcomes.length,
+      // Only show intelligence-weighted % AFTER the user has a position.
+      // Before they bet, always show the raw parimutuel pool ratio.
+      pct:
+        hasBet && o.intelligenceProb != null && o.intelligenceProb > 0
+          ? o.intelligenceProb * 100
+          : hasBet && o.lmsrProbability != null && o.lmsrProbability > 0
+            ? o.lmsrProbability * 100
+            : totalPool > 0
+              ? (Number(o.totalBetAmount) / totalPool) * 100
+              : 100 / market.outcomes.length,
     }));
     const sorted = [...raw].sort((a, b) => b.pct - a.pct);
     return raw.map((o) => {
@@ -121,36 +129,59 @@ function MarketCard({
         </div>
       )}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+      {/* ── Outcome buttons ── */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          marginTop: 4,
+        }}
+      >
         {isResolving ? (
-          <Link
-            to={`/market/${market.id}`}
-            style={{ flex: 1, textDecoration: "none" }}
-          >
+          <Link to={`/market/${market.id}`} style={{ textDecoration: "none" }}>
             <div
               style={{
-                padding: "10px",
-                borderRadius: 12,
+                padding: "13px 16px",
+                borderRadius: 14,
                 background: "#fffbeb",
-                border: "1px dashed #f59e0b",
-                fontSize: "0.75rem",
+                border: "1.5px dashed #f59e0b",
+                fontSize: "0.8rem",
                 color: "#b45309",
-                fontWeight: 700,
+                fontWeight: 800,
                 textAlign: "center",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
               }}
             >
-              Dispute Window ▶
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#b45309"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              Dispute Window Open — Tap to View
             </div>
           </Link>
         ) : isUpcoming ? (
           <div
             style={{
-              flex: 1,
-              padding: "10px",
-              borderRadius: 12,
-              background: "#f1f5f9",
-              fontSize: "0.75rem",
-              color: "#64748b",
+              padding: "13px 16px",
+              borderRadius: 14,
+              background: "rgba(59,130,246,0.06)",
+              border: "1.5px solid rgba(59,130,246,0.2)",
+              fontSize: "0.8rem",
+              color: "#3b82f6",
               fontWeight: 700,
               textAlign: "center",
             }}
@@ -158,48 +189,155 @@ function MarketCard({
             Opens {countdown}
           </div>
         ) : (
-          displayOutcomes.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => onBet(s.id)}
-              style={{
-                flex: showAll ? "1 0 45%" : 1,
-                padding: "10px 4px",
-                borderRadius: 12,
-                background: `${s.color}15`,
-                border: `1px solid ${s.color}25`,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 2,
-                boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
-              }}
-            >
-              <div
+          displayOutcomes.map((s) => {
+            const barWidth = Math.max(4, Math.min(100, s.pct));
+            return (
+              <button
+                key={s.id}
+                onClick={() => onBet(s.id)}
                 style={{
-                  fontSize: "0.6rem",
-                  fontWeight: 800,
-                  color: "var(--text-muted)",
-                  textTransform: "uppercase",
+                  width: "100%",
+                  padding: "0",
+                  borderRadius: 14,
+                  background: "var(--bg-main)",
+                  border: `1.5px solid ${s.color}40`,
+                  cursor: "pointer",
+                  overflow: "hidden",
+                  boxShadow: "none",
+                  transition: "transform 0.12s ease",
+                  display: "block",
+                  textAlign: "left",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.transform =
+                    "scale(1.01)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.transform =
+                    "scale(1)";
+                }}
+                onMouseDown={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.transform =
+                    "scale(0.98)";
+                }}
+                onMouseUp={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.transform =
+                    "scale(1.01)";
                 }}
               >
-                {s.label}
-              </div>
-              <div
-                style={{ fontSize: "1rem", fontWeight: 900, color: s.color }}
-              >
-                {s.pct.toFixed(0)}%
-              </div>
-              {s.reputationSignal != null && (
-                <div style={{ fontSize: "0.55rem", fontWeight: 700, color: "#f59e0b", display: "flex", alignItems: "center", gap: 2 }}>
-                  <svg width="7" height="7" viewBox="0 0 24 24" fill="#f59e0b" stroke="none">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
-                  {Math.round(s.reputationSignal * 100)}%
+                {/* Progress bar fill behind content */}
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: `${barWidth}%`,
+                    background: `${s.color}12`,
+                    borderRadius: 14,
+                    transition: "width 0.8s ease",
+                    pointerEvents: "none",
+                  }}
+                />
+                {/* Button content */}
+                <div
+                  style={{
+                    position: "relative",
+                    padding: "12px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  {/* Left: label + reputation signal */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                      minWidth: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.88rem",
+                        fontWeight: 800,
+                        color: "var(--text-main)",
+                        letterSpacing: "-0.01em",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {s.label}
+                    </span>
+                    {s.reputationSignal != null && hasBet && (
+                      <span
+                        style={{
+                          fontSize: "0.65rem",
+                          fontWeight: 700,
+                          color: "#f59e0b",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 3,
+                        }}
+                      >
+                        <svg
+                          width="8"
+                          height="8"
+                          viewBox="0 0 24 24"
+                          fill="#f59e0b"
+                          stroke="none"
+                        >
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                        Experts {Math.round(s.reputationSignal * 100)}%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Right: percentage + predict pill */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "1.15rem",
+                        fontWeight: 900,
+                        color: s.color,
+                        letterSpacing: "-0.02em",
+                        minWidth: 42,
+                        textAlign: "right",
+                      }}
+                    >
+                      {s.pct.toFixed(0)}%
+                    </span>
+                    <span
+                      style={{
+                        background: s.color,
+                        color: "#fff",
+                        fontSize: "0.65rem",
+                        fontWeight: 800,
+                        padding: "5px 10px",
+                        borderRadius: 99,
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                        boxShadow: `0 2px 6px ${s.color}55`,
+                      }}
+                    >
+                      Predict
+                    </span>
+                  </div>
                 </div>
-              )}
-            </button>
-          ))
+              </button>
+            );
+          })
         )}
       </div>
 
@@ -210,22 +348,21 @@ function MarketCard({
             setShowAll(!showAll);
           }}
           style={{
-            background: "rgba(255, 255, 255, 0.2)",
-            border: "1px solid var(--glass-border)",
-            padding: "8px 12px",
+            background: "transparent",
+            border: "1.5px solid var(--glass-border)",
+            padding: "9px 12px",
             borderRadius: 12,
             fontSize: "0.75rem",
-            color: "var(--text-main)",
-            fontWeight: 800,
+            color: "var(--text-muted)",
+            fontWeight: 700,
             cursor: "pointer",
             textAlign: "center",
             width: "100%",
-            marginTop: 8,
-            backdropFilter: "blur(4px)",
-            WebkitBackdropFilter: "blur(4px)",
           }}
         >
-          {showAll ? "Show Less" : `View ${market.outcomes.length - 2} more...`}
+          {showAll
+            ? "Show Less ▲"
+            : `+${market.outcomes.length - 2} more outcomes`}
         </button>
       )}
 
@@ -278,6 +415,10 @@ export const TmaFeedPage: FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeBet, setActiveBet] = useState<ActiveBet | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Set of marketIds where the current user already has a position
+  const [bettedMarketIds, setBettedMarketIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     getMarkets()
@@ -293,6 +434,15 @@ export const TmaFeedPage: FC = () => {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // Fetch the user's active positions to know which markets they've bet on
+    if (user) {
+      getMyBets("pending")
+        .then((bets) => {
+          setBettedMarketIds(new Set(bets.map((b) => b.marketId)));
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const handlePaymentSuccess = async (_payment: PaymentResponse) => {
@@ -319,6 +469,9 @@ export const TmaFeedPage: FC = () => {
 
     const bet = activeBet;
     setActiveBet(null);
+
+    // Mark this market as bet so the signal reveals immediately on the feed
+    setBettedMarketIds((prev) => new Set([...prev, bet.marketId]));
 
     const market = markets.find((m) => m.id === bet.marketId);
     if (market && user) {
@@ -409,8 +562,9 @@ export const TmaFeedPage: FC = () => {
     );
   };
 
-  const filteredOpen = filterByQuery(openMarkets)
-    .sort((a, b) => Number(b.totalPool) - Number(a.totalPool));
+  const filteredOpen = filterByQuery(openMarkets).sort(
+    (a, b) => Number(b.totalPool) - Number(a.totalPool),
+  );
   const filteredResolving = filterByQuery(resolvingMarkets);
   const filteredUpcoming = filterByQuery(upcomingMarkets);
 
@@ -503,28 +657,59 @@ export const TmaFeedPage: FC = () => {
         {/* ── Trending strip ── */}
         {trendingMarkets.length > 0 && !searchQuery.trim() && (
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-main)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="#ff6f01ff" stroke="none">
-                <path d="M12 2c0 6-6 8-6 14a6 6 0 0 0 12 0c0-6-6-8-6-14z"/>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                color: "var(--text-main)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginBottom: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="#ff6f01ff"
+                stroke="none"
+              >
+                <path d="M12 2c0 6-6 8-6 14a6 6 0 0 0 12 0c0-6-6-8-6-14z" />
               </svg>
               Trending
             </div>
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                paddingBottom: 4,
+                scrollbarWidth: "none",
+              }}
+            >
               {trendingMarkets.map((m) => {
-                const top = m.outcomes.reduce((a, b) => {
-                  const aProb = a.lmsrProbability ?? (Number(m.totalPool) > 0 ? Number(a.totalBetAmount) / Number(m.totalPool) : 0);
-                  const bProb = b.lmsrProbability ?? (Number(m.totalPool) > 0 ? Number(b.totalBetAmount) / Number(m.totalPool) : 0);
-                  return bProb > aProb ? b : a;
-                }, m.outcomes[0]);
-                const topPct = top.lmsrProbability != null && top.lmsrProbability > 0
-                  ? Math.round(top.lmsrProbability * 100)
-                  : Number(m.totalPool) > 0
-                    ? Math.round((Number(top.totalBetAmount) / Number(m.totalPool)) * 100)
-                    : 0;
+                const prob = (o: (typeof m.outcomes)[0]) =>
+                  o.intelligenceProb != null && o.intelligenceProb > 0
+                    ? o.intelligenceProb
+                    : o.lmsrProbability != null && o.lmsrProbability > 0
+                      ? o.lmsrProbability
+                      : Number(m.totalPool) > 0
+                        ? Number(o.totalBetAmount) / Number(m.totalPool)
+                        : 0;
+                const top = m.outcomes.reduce(
+                  (a, b) => (prob(b) > prob(a) ? b : a),
+                  m.outcomes[0],
+                );
+                const topPct = Math.round(prob(top) * 100);
                 return (
                   <button
                     key={m.id}
-                    onClick={() => setActiveBet({ marketId: m.id, outcomeId: top.id })}
+                    onClick={() =>
+                      setActiveBet({ marketId: m.id, outcomeId: top.id })
+                    }
                     style={{
                       flexShrink: 0,
                       width: 140,
@@ -537,12 +722,46 @@ export const TmaFeedPage: FC = () => {
                       boxShadow: "var(--shadow-sm)",
                     }}
                   >
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-main)", lineHeight: 1.3, marginBottom: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--text-main)",
+                        lineHeight: 1.3,
+                        marginBottom: 6,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
                       {m.title}
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#22c55e" }}>{top.label} {topPct}%</span>
-                      <span style={{ fontSize: 9, color: "var(--text-subtle)", fontWeight: 600 }}>Nu {Number(m.totalPool).toLocaleString()}</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: "#22c55e",
+                        }}
+                      >
+                        {top.label} {topPct}%
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          color: "var(--text-subtle)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Nu {Number(m.totalPool).toLocaleString()}
+                      </span>
                     </div>
                   </button>
                 );
@@ -615,6 +834,7 @@ export const TmaFeedPage: FC = () => {
               <MarketCard
                 key={market.id}
                 market={market}
+                hasBet={bettedMarketIds.has(market.id)}
                 onBet={(outcomeId) =>
                   setActiveBet({ marketId: market.id, outcomeId })
                 }
@@ -658,6 +878,7 @@ export const TmaFeedPage: FC = () => {
               <MarketCard
                 key={market.id}
                 market={market}
+                hasBet={bettedMarketIds.has(market.id)}
                 onBet={(outcomeId) =>
                   setActiveBet({ marketId: market.id, outcomeId })
                 }
@@ -701,6 +922,7 @@ export const TmaFeedPage: FC = () => {
               <MarketCard
                 key={market.id}
                 market={market}
+                hasBet={bettedMarketIds.has(market.id)}
                 onBet={(outcomeId) =>
                   setActiveBet({ marketId: market.id, outcomeId })
                 }

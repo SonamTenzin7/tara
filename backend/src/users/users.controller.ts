@@ -37,7 +37,10 @@ class ProfileResponse {
 
 class TransactionResponse {
   @ApiProperty({ example: "uuid-5678" }) id: string;
-  @ApiProperty({ enum: TransactionType, example: TransactionType.POSITION_OPENED })
+  @ApiProperty({
+    enum: TransactionType,
+    example: TransactionType.POSITION_OPENED,
+  })
   type: TransactionType;
   @ApiProperty({
     example: -100.0,
@@ -116,6 +119,12 @@ export class UsersController {
         "totalPredictions",
         "correctPredictions",
         "categoryScores",
+        // contrarian badge
+        "contrarianBadge",
+        "contrarianWins",
+        "contrarianAttempts",
+        // streak
+        "telegramStreak",
         // hashes loaded only for boolean derivation — never forwarded to client
         "dkPhoneHash",
         "telegramPhoneHash",
@@ -142,7 +151,11 @@ export class UsersController {
       ...safeUser,
       creditsBalance,
       isDkPhoneLinked: !!dkPhoneHash,
-      isPhoneVerified: !!(telegramPhoneHash && dkPhoneHash && telegramPhoneHash === dkPhoneHash),
+      isPhoneVerified: !!(
+        telegramPhoneHash &&
+        dkPhoneHash &&
+        telegramPhoneHash === dkPhoneHash
+      ),
     };
   }
 
@@ -199,7 +212,10 @@ export class UsersController {
     description: "Filter by bet status",
   })
   @ApiResponse({ status: 200, type: [PositionResponse] })
-  getMyPositions(@Request() req: any, @Query("status") status?: PositionStatus) {
+  getMyPositions(
+    @Request() req: any,
+    @Query("status") status?: PositionStatus,
+  ) {
     const where: any = { userId: req.user.userId };
     if (status) where.status = status;
     return this.betRepo.find({
@@ -223,7 +239,11 @@ export class UsersController {
       .leftJoinAndSelect("bet.outcome", "outcome")
       .where("bet.userId = :userId", { userId: req.user.userId })
       .andWhere("bet.status IN (:...statuses)", {
-        statuses: [PositionStatus.WON, PositionStatus.LOST, PositionStatus.REFUNDED],
+        statuses: [
+          PositionStatus.WON,
+          PositionStatus.LOST,
+          PositionStatus.REFUNDED,
+        ],
       })
       .orderBy("bet.placedAt", "DESC")
       .getMany();

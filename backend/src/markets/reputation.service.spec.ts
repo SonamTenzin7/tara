@@ -145,9 +145,24 @@ describe("ReputationService.recalculateForUser — multiple bets same market", (
     // (tested below). recalculateForUser intentionally counts each bet row
     // because a user can bet on DIFFERENT outcomes in the same market.
     const allBets = [
-      makeBet({ id: "b1", status: PositionStatus.WON,  marketId: "m1", outcomeId: "o1" }),
-      makeBet({ id: "b2", status: PositionStatus.WON,  marketId: "m1", outcomeId: "o1" }),
-      makeBet({ id: "b3", status: PositionStatus.WON,  marketId: "m1", outcomeId: "o1" }),
+      makeBet({
+        id: "b1",
+        status: PositionStatus.WON,
+        marketId: "m1",
+        outcomeId: "o1",
+      }),
+      makeBet({
+        id: "b2",
+        status: PositionStatus.WON,
+        marketId: "m1",
+        outcomeId: "o1",
+      }),
+      makeBet({
+        id: "b3",
+        status: PositionStatus.WON,
+        marketId: "m1",
+        outcomeId: "o1",
+      }),
     ];
 
     const { svc, mockUserRepo } = makeService(user, allBets);
@@ -165,7 +180,7 @@ describe("ReputationService.recalculateForUser — multiple bets same market", (
   it("a user with 1 WON and 1 LOST bet has 50% raw accuracy", async () => {
     const user = makeUser();
     const allBets = [
-      makeBet({ id: "b1", status: PositionStatus.WON  }),
+      makeBet({ id: "b1", status: PositionStatus.WON }),
       makeBet({ id: "b2", status: PositionStatus.LOST }),
     ];
 
@@ -208,15 +223,43 @@ describe("ReputationService.computeMarketSignal — deduplication", () => {
     // Without deduplication: YES weight = 0.9+0.9+0.9=2.7, NO weight=1.0 → YES=73%
     // With deduplication:    YES weight = 0.9,           NO weight=1.0 → YES=47%
     const rows = [
-      { userId: "u1", outcomeId: "outcome-YES", reputationScore: 0.9, categoryScores: null },
-      { userId: "u1", outcomeId: "outcome-YES", reputationScore: 0.9, categoryScores: null },
-      { userId: "u1", outcomeId: "outcome-YES", reputationScore: 0.9, categoryScores: null },
-      { userId: "u2", outcomeId: "outcome-NO",  reputationScore: 0.5, categoryScores: null },
-      { userId: "u3", outcomeId: "outcome-NO",  reputationScore: 0.5, categoryScores: null },
+      {
+        userId: "u1",
+        outcomeId: "outcome-YES",
+        reputationScore: 0.9,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "outcome-YES",
+        reputationScore: 0.9,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "outcome-YES",
+        reputationScore: 0.9,
+        categoryScores: null,
+      },
+      {
+        userId: "u2",
+        outcomeId: "outcome-NO",
+        reputationScore: 0.5,
+        categoryScores: null,
+      },
+      {
+        userId: "u3",
+        outcomeId: "outcome-NO",
+        reputationScore: 0.5,
+        categoryScores: null,
+      },
     ];
 
     const svc = makeSignalService(rows);
-    const signal = await svc.computeMarketSignal("m1", ["outcome-YES", "outcome-NO"]);
+    const signal = await svc.computeMarketSignal("m1", [
+      "outcome-YES",
+      "outcome-NO",
+    ]);
 
     // With dedup: YES=0.9, NO=0.5+0.5=1.0 → total=1.9
     // YES signal = 0.9/1.9 ≈ 0.474 — below 50% despite u1 being high-rep
@@ -230,14 +273,54 @@ describe("ReputationService.computeMarketSignal — deduplication", () => {
   it("returns {} when fewer than 3 unique bettors even with many bets", async () => {
     // u1 placed 5 bets, u2 placed 3 bets — only 2 unique users → no signal
     const rows = [
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u2", outcomeId: "o2", reputationScore: 0.6, categoryScores: null },
-      { userId: "u2", outcomeId: "o2", reputationScore: 0.6, categoryScores: null },
-      { userId: "u2", outcomeId: "o2", reputationScore: 0.6, categoryScores: null },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u2",
+        outcomeId: "o2",
+        reputationScore: 0.6,
+        categoryScores: null,
+      },
+      {
+        userId: "u2",
+        outcomeId: "o2",
+        reputationScore: 0.6,
+        categoryScores: null,
+      },
+      {
+        userId: "u2",
+        outcomeId: "o2",
+        reputationScore: 0.6,
+        categoryScores: null,
+      },
     ];
 
     const svc = makeSignalService(rows);
@@ -251,12 +334,42 @@ describe("ReputationService.computeMarketSignal — deduplication", () => {
     // u3 (rep 0.5) placed 1 bet  on o2
     // After dedup: o1 weight = 0.8+0.6=1.4, o2 weight=0.5 → total=1.9
     const rows = [
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u2", outcomeId: "o1", reputationScore: 0.6, categoryScores: null },
-      { userId: "u2", outcomeId: "o1", reputationScore: 0.6, categoryScores: null },
-      { userId: "u3", outcomeId: "o2", reputationScore: 0.5, categoryScores: null },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u2",
+        outcomeId: "o1",
+        reputationScore: 0.6,
+        categoryScores: null,
+      },
+      {
+        userId: "u2",
+        outcomeId: "o1",
+        reputationScore: 0.6,
+        categoryScores: null,
+      },
+      {
+        userId: "u3",
+        outcomeId: "o2",
+        reputationScore: 0.5,
+        categoryScores: null,
+      },
     ];
 
     const svc = makeSignalService(rows);
@@ -271,10 +384,30 @@ describe("ReputationService.computeMarketSignal — deduplication", () => {
     // u1 first bet o1, then bet o2 — final position is o2
     // u2 and u3 on o1 to reach 3 unique bettors
     const rows = [
-      { userId: "u1", outcomeId: "o1", reputationScore: 0.8, categoryScores: null },
-      { userId: "u1", outcomeId: "o2", reputationScore: 0.8, categoryScores: null }, // last bet
-      { userId: "u2", outcomeId: "o1", reputationScore: 0.6, categoryScores: null },
-      { userId: "u3", outcomeId: "o1", reputationScore: 0.5, categoryScores: null },
+      {
+        userId: "u1",
+        outcomeId: "o1",
+        reputationScore: 0.8,
+        categoryScores: null,
+      },
+      {
+        userId: "u1",
+        outcomeId: "o2",
+        reputationScore: 0.8,
+        categoryScores: null,
+      }, // last bet
+      {
+        userId: "u2",
+        outcomeId: "o1",
+        reputationScore: 0.6,
+        categoryScores: null,
+      },
+      {
+        userId: "u3",
+        outcomeId: "o1",
+        reputationScore: 0.5,
+        categoryScores: null,
+      },
     ];
 
     const svc = makeSignalService(rows);
@@ -284,5 +417,199 @@ describe("ReputationService.computeMarketSignal — deduplication", () => {
     // o1 = 0.6+0.5=1.1, o2=0.8 → total=1.9
     expect(signal["o2"]).toBeCloseTo(0.8 / 1.9, 3);
     expect(signal["o1"]).toBeCloseTo(1.1 / 1.9, 3);
+  });
+});
+
+// ─── calcContrarianBadge (pure maths) ─────────────────────────────────────────
+
+describe("ReputationService.calcContrarianBadge", () => {
+  const svc = new ReputationService(null as any, null as any, null as any);
+
+  it("returns null when attempts < 3 regardless of wins", () => {
+    expect(svc.calcContrarianBadge(0, 0)).toBeNull();
+    expect(svc.calcContrarianBadge(2, 2)).toBeNull();
+  });
+
+  it("returns null when win-rate is below 55% with ≥ 3 attempts", () => {
+    expect(svc.calcContrarianBadge(1, 3)).toBeNull(); // 33%
+    expect(svc.calcContrarianBadge(2, 4)).toBeNull(); // 50%
+    expect(svc.calcContrarianBadge(5, 10)).toBeNull(); // 50%
+  });
+
+  it("returns bronze when wins ≥ 3 AND win-rate ≥ 55%", () => {
+    expect(svc.calcContrarianBadge(3, 3)).toBe("bronze"); // 100%
+    expect(svc.calcContrarianBadge(3, 5)).toBe("bronze"); // 60%
+    expect(svc.calcContrarianBadge(6, 10)).toBe("bronze"); // 60%, wins < 7
+  });
+
+  it("returns silver when wins ≥ 7 AND win-rate ≥ 55%", () => {
+    expect(svc.calcContrarianBadge(7, 7)).toBe("silver"); // 100%
+    expect(svc.calcContrarianBadge(8, 12)).toBe("silver"); // 67%
+    expect(svc.calcContrarianBadge(14, 20)).toBe("silver"); // 70%, wins < 15
+  });
+
+  it("returns gold when wins ≥ 15 AND win-rate ≥ 55%", () => {
+    expect(svc.calcContrarianBadge(15, 15)).toBe("gold"); // 100%
+    expect(svc.calcContrarianBadge(20, 30)).toBe("gold"); // 67%
+    expect(svc.calcContrarianBadge(15, 27)).toBe("gold"); // 55.6%
+  });
+
+  it("returns null for 15+ wins if win-rate < 55%", () => {
+    expect(svc.calcContrarianBadge(15, 28)).toBeNull(); // 53.6%
+  });
+
+  it("win-rate exactly 55% qualifies (boundary inclusive)", () => {
+    expect(svc.calcContrarianBadge(11, 20)).toBe("silver"); // 55%
+  });
+});
+
+// ─── recordContrarianOutcome ──────────────────────────────────────────────────
+
+describe("ReputationService.recordContrarianOutcome", () => {
+  function makeContrarianService(user: any) {
+    const mockUserRepo = {
+      findOneBy: jest.fn().mockResolvedValue(user),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const svc = new ReputationService(
+      mockUserRepo as any,
+      null as any,
+      null as any,
+    );
+    return { svc, mockUserRepo };
+  }
+
+  it("does nothing when predictedProbability is null (no signal)", async () => {
+    const user = makeUser({
+      contrarianWins: 0,
+      contrarianAttempts: 0,
+      contrarianBadge: null,
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", null, true);
+    expect(mockUserRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when predictedProbability >= 0.5 (consensus pick, not contrarian)", async () => {
+    const user = makeUser({
+      contrarianWins: 0,
+      contrarianAttempts: 0,
+      contrarianBadge: null,
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", 0.5, true);
+    expect(mockUserRepo.update).not.toHaveBeenCalled();
+    await svc.recordContrarianOutcome("u1", 0.8, true);
+    expect(mockUserRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("increments attempts but NOT wins on a contrarian LOSS", async () => {
+    const user = makeUser({
+      contrarianWins: 0,
+      contrarianAttempts: 0,
+      contrarianBadge: null,
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", 0.3, false);
+
+    const [, payload] = mockUserRepo.update.mock.calls[0];
+    expect(payload.contrarianAttempts).toBe(1);
+    expect(payload.contrarianWins).toBe(0);
+    expect(payload.contrarianBadge).toBeNull();
+  });
+
+  it("increments both attempts and wins on a contrarian WIN — earns bronze", async () => {
+    const user = makeUser({
+      contrarianWins: 2,
+      contrarianAttempts: 3,
+      contrarianBadge: null,
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", 0.2, true);
+
+    const [, payload] = mockUserRepo.update.mock.calls[0];
+    expect(payload.contrarianAttempts).toBe(4);
+    expect(payload.contrarianWins).toBe(3);
+    // 3/4 = 75% ≥ 55%, wins ≥ 3 → bronze
+    expect(payload.contrarianBadge).toBe("bronze");
+  });
+
+  it("upgrades badge from bronze to silver when crossing 7-win threshold", async () => {
+    const user = makeUser({
+      contrarianWins: 6,
+      contrarianAttempts: 8,
+      contrarianBadge: "bronze",
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", 0.1, true);
+
+    const [, payload] = mockUserRepo.update.mock.calls[0];
+    expect(payload.contrarianWins).toBe(7);
+    expect(payload.contrarianAttempts).toBe(9);
+    // 7/9 ≈ 77.8% → silver
+    expect(payload.contrarianBadge).toBe("silver");
+  });
+
+  it("upgrades badge from silver to gold when crossing 15-win threshold", async () => {
+    const user = makeUser({
+      contrarianWins: 14,
+      contrarianAttempts: 18,
+      contrarianBadge: "silver",
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", 0.25, true);
+
+    const [, payload] = mockUserRepo.update.mock.calls[0];
+    expect(payload.contrarianWins).toBe(15);
+    expect(payload.contrarianAttempts).toBe(19);
+    // 15/19 ≈ 78.9% → gold
+    expect(payload.contrarianBadge).toBe("gold");
+  });
+
+  it("badge drops to null when win-rate falls below 55% after losses", async () => {
+    // 3 wins / 5 attempts = 60% → bronze. One more loss → 3/6 = 50% < 55% → null
+    const user = makeUser({
+      contrarianWins: 3,
+      contrarianAttempts: 5,
+      contrarianBadge: "bronze",
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", 0.4, false);
+
+    const [, payload] = mockUserRepo.update.mock.calls[0];
+    expect(payload.contrarianAttempts).toBe(6);
+    expect(payload.contrarianWins).toBe(3);
+    // 3/6 = 50% < 55% → null
+    expect(payload.contrarianBadge).toBeNull();
+  });
+
+  it("does nothing when user is not found in DB", async () => {
+    const mockUserRepo = {
+      findOneBy: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+    };
+    const svc = new ReputationService(
+      mockUserRepo as any,
+      null as any,
+      null as any,
+    );
+    await svc.recordContrarianOutcome("missing-user", 0.2, true);
+    expect(mockUserRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("handles fresh user with undefined contrarianWins/Attempts (new column)", async () => {
+    const user = makeUser({
+      contrarianWins: undefined,
+      contrarianAttempts: undefined,
+      contrarianBadge: null,
+    });
+    const { svc, mockUserRepo } = makeContrarianService(user);
+    await svc.recordContrarianOutcome("u1", 0.3, true);
+
+    const [, payload] = mockUserRepo.update.mock.calls[0];
+    expect(payload.contrarianAttempts).toBe(1);
+    expect(payload.contrarianWins).toBe(1);
+    // 1 attempt < 3 → no badge yet
+    expect(payload.contrarianBadge).toBeNull();
   });
 });

@@ -186,8 +186,34 @@ export function PwaMarketDetailPage() {
 
           {/* Crowd sentiment */}
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg)", padding: "24px", boxShadow: "var(--shadow-premium)" }}>
-            <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "20px" }}>
-              CROWD SENTIMENT
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "var(--text-subtle)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                CROWD SENTIMENT
+              </div>
+              {(() => {
+                const meta = (market as any).signalMeta;
+                if (!meta || meta.composite === 0) return null;
+                const c = meta.composite as number;
+                const pct = Math.round(c * 100);
+                const col = c >= 0.6 ? "#22c55e" : c >= 0.3 ? "#f59e0b" : "#ef4444";
+                const label = c >= 0.6 ? "High" : c >= 0.3 ? "Moderate" : "Low";
+                const r = 7, circ = 2 * Math.PI * r;
+                const dash = (c * circ).toFixed(2);
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }} title={`Participants: ${meta.participantCount} · Reputation depth: ${Math.round(meta.reputationDepth * 100)}% · Maturity: ${Math.round(meta.maturityScore * 100)}%`}>
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                      <circle cx="9" cy="9" r={r} fill="none" stroke="var(--bg-secondary)" strokeWidth="2.5" />
+                      <circle cx="9" cy="9" r={r} fill="none" stroke={col} strokeWidth="2.5"
+                        strokeDasharray={`${dash} ${circ}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 9 9)" />
+                    </svg>
+                    <span style={{ fontSize: "0.68rem", fontWeight: 800, color: col, letterSpacing: "0.04em" }}>
+                      {label} confidence · {pct}%
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {market.outcomes.map((outcome, idx) => {

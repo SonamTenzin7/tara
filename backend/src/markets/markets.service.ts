@@ -23,6 +23,7 @@ import {
   PaymentStatus,
 } from "../entities/payment.entity";
 import { Transaction, TransactionType } from "../entities/transaction.entity";
+import { Position, PositionStatus } from "../entities/position.entity";
 import { User } from "../entities/user.entity";
 import { ParimutuelEngine } from "./parimutuel.engine";
 import { LMSRService } from "./lmsr.service";
@@ -151,17 +152,41 @@ export class MarketsService {
   }
 
   /**
-   * Attaches reputationSignal (0–1) to each outcome in-place.
+   * Attaches reputationSignal (0–1) to each outcome in-place, and attaches
+   * signalMeta (composite confidence dimensions) to the market itself.
    * Signal is null when there are fewer than 3 unique bettors.
    */
   private async attachSignal(market: Market): Promise<void> {
     if (!market.outcomes?.length || Number(market.totalPool) === 0) return;
     const ids = market.outcomes.map((o) => o.id);
-    const signal = await this.reputationService.computeMarketSignal(market.id, ids, market.category);
-    for (const outcome of market.outcomes) {
+    const [signal, signalMeta, weightedShares] = await Promise.all([
+      this.reputationService.computeMarketSignal(market.id, ids, market.category),
+      this.reputationService.computeSignalConfidence(market.id, market.category),
+      this.reputationService.computeReputationWeightedShares(market.id),
+    ]);
+
+    // Reputation-weighted LMSR probabilities (Feature 1)
+    // Run LMSR on effective shares keyed by outcome order
+    const b = Number(market.liquidityParam) || 1000;
+    const effectiveAmounts = ids.map((id) => weightedShares[id] ?? 0);
+    const hasWeightedData = effectiveAmounts.some((a) => a > 0);
+    let repWeightedProbs: number[] = [];
+    if (hasWeightedData) {
+      const maxA = Math.max(...effectiveAmounts);
+      const exps = effectiveAmounts.map((a) => Math.exp((a - maxA) / b));
+      const sumExp = exps.reduce((s, e) => s + e, 0);
+      repWeightedProbs = exps.map((e) => parseFloat((e / sumExp).toFixed(6)));
+    }
+
+    for (let i = 0; i < market.outcomes.length; i++) {
+      const outcome = market.outcomes[i];
       (outcome as any).reputationSignal =
         signal[outcome.id] != null ? signal[outcome.id] : null;
+      // intelligenceProb: rep-weighted LMSR (null when no data)
+      (outcome as any).intelligenceProb =
+        hasWeightedData ? repWeightedProbs[i] : null;
     }
+    (market as any).signalMeta = signalMeta;
   }
 
   async update(id: string, dto: UpdateMarketDto): Promise<Market> {
@@ -214,6 +239,11 @@ export class MarketsService {
     return result;
   }
 
+  // ── Dispute constants ────────────────────────────────────────────────────
+  private readonly DISPUTE_MIN_PARTICIPANTS = 3;
+  private readonly DISPUTE_MIN_BOND = 10;          // Nu 10 floor
+  private readonly DISPUTE_BOND_PCT = 0.01;        // 1 % of pool
+
   async submitDispute(
     userId: string,
     marketId: string,
@@ -232,6 +262,56 @@ export class MarketsService {
 
     if (market.disputeDeadlineAt && new Date() > market.disputeDeadlineAt)
       throw new BadRequestException("Dispute window has closed");
+
+    // ── Guard 1: market must have at least 3 unique participants ─────────────
+    const { count: participantCount } = await this.dataSource
+      .getRepository(Position)
+      .createQueryBuilder("p")
+      .select("COUNT(DISTINCT p.userId)", "count")
+      .where("p.marketId = :marketId", { marketId })
+      .getRawOne();
+    if (Number(participantCount) < this.DISPUTE_MIN_PARTICIPANTS)
+      throw new BadRequestException(
+        `Disputes require at least ${this.DISPUTE_MIN_PARTICIPANTS} participants in the market`,
+      );
+
+    // ── Guard 2: disputer must hold an active position in this market ────────
+    const hasPosition = await this.dataSource
+      .getRepository(Position)
+      .findOne({
+        where: {
+          userId,
+          marketId,
+          status: PositionStatus.PENDING,
+        },
+      });
+    if (!hasPosition)
+      throw new BadRequestException(
+        "You must have an active position in this market to raise a dispute",
+      );
+
+    // ── Guard 3: one dispute per user per market ──────────────────────────────
+    const alreadyDisputed = await this.dataSource
+      .getRepository(Dispute)
+      .findOne({ where: { userId, marketId } });
+    if (alreadyDisputed)
+      throw new BadRequestException(
+        "You have already submitted a dispute for this market",
+      );
+
+    // ── Guard 4: minimum bond = max(MIN_BOND, pool × BOND_PCT) ───────────────
+    const pool = Number(market.totalPool);
+    const minBond = Math.max(
+      this.DISPUTE_MIN_BOND,
+      Math.ceil(pool * this.DISPUTE_BOND_PCT),
+    );
+    const submittedBond = dto.bondAmount ?? 0;
+    // For DK Bank path we validate after reading payment amount below,
+    // so only check here for the credits path
+    if (!dto.paymentId && submittedBond < minBond)
+      throw new BadRequestException(
+        `Dispute bond must be at least Nu ${minBond} (1% of pool, min Nu ${this.DISPUTE_MIN_BOND})`,
+      );
 
     return await this.dataSource.transaction(async (em) => {
       let bondAmount: number;
@@ -261,6 +341,11 @@ export class MarketsService {
           );
 
         bondAmount = Number(payment.amount);
+
+        if (bondAmount < minBond)
+          throw new BadRequestException(
+            `Dispute bond must be at least Nu ${minBond} (1% of pool, min Nu ${this.DISPUTE_MIN_BOND})`,
+          );
 
         return em.save(
           Dispute,
@@ -368,6 +453,40 @@ export class MarketsService {
       where: { marketId },
       order: { createdAt: "DESC" },
     });
+  }
+
+  /** Returns the minimum bond required to raise a dispute on this market. */
+  async getDisputeRequirements(marketId: string): Promise<{
+    minBond: number;
+    minParticipants: number;
+    eligible: boolean;
+    reason: string | null;
+  }> {
+    const market = await this.findOne(marketId);
+    const pool = Number(market.totalPool);
+    const minBond = Math.max(
+      this.DISPUTE_MIN_BOND,
+      Math.ceil(pool * this.DISPUTE_BOND_PCT),
+    );
+
+    const { count } = await this.dataSource
+      .getRepository(Position)
+      .createQueryBuilder("p")
+      .select("COUNT(DISTINCT p.userId)", "count")
+      .where("p.marketId = :marketId", { marketId })
+      .getRawOne();
+
+    const participantCount = Number(count);
+    const eligible = participantCount >= this.DISPUTE_MIN_PARTICIPANTS;
+
+    return {
+      minBond,
+      minParticipants: this.DISPUTE_MIN_PARTICIPANTS,
+      eligible,
+      reason: eligible
+        ? null
+        : `Market needs at least ${this.DISPUTE_MIN_PARTICIPANTS} participants (currently ${participantCount})`,
+    };
   }
 
   async delete(id: string): Promise<void> {

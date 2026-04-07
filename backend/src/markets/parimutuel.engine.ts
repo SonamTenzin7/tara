@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, Logger, OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  BadRequestException,
+  Logger,
+  OnModuleInit,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource, In } from "typeorm";
 import { RedisService } from "../redis/redis.service";
@@ -13,7 +18,6 @@ import { User } from "../entities/user.entity";
 import { LMSRService } from "./lmsr.service";
 import { ReputationService } from "./reputation.service";
 import { TelegramSimpleService } from "../telegram/telegram.service.simple";
-
 
 // ─── Valid state machine transitions ────────────────────────────────────────
 const VALID_TRANSITIONS: Record<MarketStatus, MarketStatus[]> = {
@@ -31,7 +35,9 @@ export class ParimutuelEngine implements OnModuleInit {
   private readonly logger = new Logger(ParimutuelEngine.name);
 
   onModuleInit() {
-    this.logger.log("ParimutuelEngine [v2] initialized with dynamic calculation support");
+    this.logger.log(
+      "ParimutuelEngine [v2] initialized with dynamic calculation support",
+    );
   }
 
   constructor(
@@ -39,7 +45,8 @@ export class ParimutuelEngine implements OnModuleInit {
     @InjectRepository(Outcome) private outcomeRepo: Repository<Outcome>,
     @InjectRepository(Position) private betRepo: Repository<Position>,
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
-    @InjectRepository(Transaction) private transactionRepo: Repository<Transaction>,
+    @InjectRepository(Transaction)
+    private transactionRepo: Repository<Transaction>,
     @InjectRepository(Settlement)
     private settlementRepo: Repository<Settlement>,
     @InjectRepository(Dispute) private disputeRepo: Repository<Dispute>,
@@ -50,8 +57,12 @@ export class ParimutuelEngine implements OnModuleInit {
     private telegramSimple: TelegramSimpleService,
   ) {}
 
-  private async getCreditsBalance(em: { getRepository: Function }, userId: string): Promise<number> {
-    const { balance } = await em.getRepository(Transaction)
+  private async getCreditsBalance(
+    em: { getRepository: Function },
+    userId: string,
+  ): Promise<number> {
+    const { balance } = await em
+      .getRepository(Transaction)
       .createQueryBuilder("t")
       .select("COALESCE(SUM(t.amount), 0)", "balance")
       .where("t.userId = :userId", { userId })
@@ -84,10 +95,17 @@ export class ParimutuelEngine implements OnModuleInit {
     // are serialised at the application layer before touching the DB.
     let lockToken: string | null = null;
     try {
-      lockToken = await this.redis.acquireLockWithRetry(`market:${marketId}`, 10, 3, 150);
+      lockToken = await this.redis.acquireLockWithRetry(
+        `market:${marketId}`,
+        10,
+        3,
+        150,
+      );
     } catch (e: any) {
       if (e?.message === "LOCK_CONTENDED") {
-        throw new BadRequestException("Market is busy, please try again in a moment");
+        throw new BadRequestException(
+          "Market is busy, please try again in a moment",
+        );
       }
       // Redis unavailable — proceed without lock (DB pessimistic lock still protects us)
     }
@@ -121,7 +139,9 @@ export class ParimutuelEngine implements OnModuleInit {
         const user = await em.findOne(User, { where: { id: userId } });
         if (!user) throw new BadRequestException("User not found");
         const balanceBefore = await this.getCreditsBalance(em, userId);
-        this.logger.log(`[placePosition] user=${userId} credits=${balanceBefore} betAmount=${amount}`);
+        this.logger.log(
+          `[placePosition] user=${userId} credits=${balanceBefore} betAmount=${amount}`,
+        );
         if (balanceBefore < amount)
           throw new BadRequestException("Insufficient balance");
 
@@ -144,8 +164,16 @@ export class ParimutuelEngine implements OnModuleInit {
         // Calculate LMSR probabilities (for display)
         const lmsrProbs = this.lmsrService.calculateProbabilities(
           market.outcomes,
-          Number(market.liquidityParam) || 1000, // Liquidity parameter from market or default
+          Number(market.liquidityParam) || 1000,
         );
+
+        // Snapshot probability of the chosen outcome BEFORE this bet lands
+        // (pre-bet LMSR probability is the fair price the user traded at)
+        const outcomeIndex = market.outcomes.findIndex(
+          (o) => o.id === outcomeId,
+        );
+        const predictedProbability =
+          outcomeIndex >= 0 ? lmsrProbs[outcomeIndex] : null;
 
         // Update LMSR probabilities for all outcomes
         for (let i = 0; i < market.outcomes.length; i++) {
@@ -155,6 +183,10 @@ export class ParimutuelEngine implements OnModuleInit {
 
         await em.save(Market, market);
 
+        // Update lastActiveAt for decay tracking (outside the transaction is fine —
+        // worst case it's slightly stale, never wrong)
+        await em.update(User, { id: userId }, { lastActiveAt: new Date() });
+
         // Create bet record
         const bet = em.create(Position, {
           userId,
@@ -163,31 +195,39 @@ export class ParimutuelEngine implements OnModuleInit {
           amount,
           status: PositionStatus.PENDING,
           oddsAtPlacement: outcome.currentOdds,
+          predictedProbability,
         });
         const savedPosition = await em.save(Position, bet);
 
-        await em.save(Transaction, em.create(Transaction, {
-          type: TransactionType.POSITION_OPENED,
-          amount: -amount,
-          balanceBefore,
-          balanceAfter: balanceBefore - amount,
-          positionId: savedPosition.id,
-          userId,
-          note: `Position on outcome: ${outcome.label}`,
-        }));
+        await em.save(
+          Transaction,
+          em.create(Transaction, {
+            type: TransactionType.POSITION_OPENED,
+            amount: -amount,
+            balanceBefore,
+            balanceAfter: balanceBefore - amount,
+            positionId: savedPosition.id,
+            userId,
+            note: `Position on outcome: ${outcome.label}`,
+          }),
+        );
 
         return savedPosition;
       });
     } finally {
-      if (lockToken) await this.redis.releaseLock(`market:${marketId}`, lockToken);
+      if (lockToken)
+        await this.redis.releaseLock(`market:${marketId}`, lockToken);
       // Invalidate market cache so subsequent reads reflect updated pool/odds
-      await this.redis.del("tara:cache:markets:all", `tara:cache:market:${marketId}`);
+      await this.redis.del(
+        "tara:cache:markets:all",
+        `tara:cache:market:${marketId}`,
+      );
       // Invalidate balance cache for the bettor
       await this.redis.del(`tara:cache:balance:${userId}`);
     }
   }
 
-  // Transition market state 
+  // Transition market state
   async transitionMarket(marketId: string, to: MarketStatus): Promise<Market> {
     const market = await this.marketRepo.findOneBy({ id: marketId });
     if (!market) throw new BadRequestException("Market not found");
@@ -202,18 +242,24 @@ export class ParimutuelEngine implements OnModuleInit {
     return this.marketRepo.save(market);
   }
 
-  // Propose resolution: open 24h dispute window 
-  async proposeResolution(marketId: string, proposedOutcomeId: string): Promise<Market> {
+  // Propose resolution: open 24h dispute window
+  async proposeResolution(
+    marketId: string,
+    proposedOutcomeId: string,
+  ): Promise<Market> {
     const market = await this.marketRepo.findOne({
       where: { id: marketId },
       relations: ["outcomes"],
     });
     if (!market) throw new BadRequestException("Market not found");
     if (market.status !== MarketStatus.CLOSED)
-      throw new BadRequestException("Market must be Closed to propose resolution");
+      throw new BadRequestException(
+        "Market must be Closed to propose resolution",
+      );
 
     const proposed = market.outcomes.find((o) => o.id === proposedOutcomeId);
-    if (!proposed) throw new BadRequestException("Proposed outcome not in this market");
+    if (!proposed)
+      throw new BadRequestException("Proposed outcome not in this market");
 
     market.proposedOutcomeId = proposedOutcomeId;
     market.disputeDeadlineAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -221,7 +267,7 @@ export class ParimutuelEngine implements OnModuleInit {
     return this.marketRepo.save(market);
   }
 
-  // Resolve market: mark winner & trigger settlement 
+  // Resolve market: mark winner & trigger settlement
   async resolveMarket(
     marketId: string,
     winningOutcomeId: string,
@@ -232,7 +278,9 @@ export class ParimutuelEngine implements OnModuleInit {
     });
     if (!market) throw new BadRequestException("Market not found");
     if (market.status !== MarketStatus.RESOLVING)
-      throw new BadRequestException("Market must be in Resolving state before final resolution");
+      throw new BadRequestException(
+        "Market must be in Resolving state before final resolution",
+      );
 
     const winner = market.outcomes.find((o) => o.id === winningOutcomeId);
     if (!winner)
@@ -254,13 +302,15 @@ export class ParimutuelEngine implements OnModuleInit {
 
     // Recalculate reputation + send individual result DMs — fire and forget
     this.sendSettlementNotifications(market, winner, settlement).catch((err) =>
-      this.logger.warn(`[Notify] Settlement notifications failed for market ${marketId}: ${err.message}`),
+      this.logger.warn(
+        `[Notify] Settlement notifications failed for market ${marketId}: ${err.message}`,
+      ),
     );
 
     return settlement;
   }
 
-  // Refund dispute bonds 
+  // Refund dispute bonds
   private async refundDisputeBonds(marketId: string): Promise<void> {
     const disputes = await this.disputeRepo.find({
       where: { marketId, bondRefunded: false },
@@ -268,21 +318,24 @@ export class ParimutuelEngine implements OnModuleInit {
     for (const dispute of disputes) {
       await this.dataSource.transaction(async (em) => {
         const balanceBefore = await this.getCreditsBalance(em, dispute.userId);
-        await em.save(Transaction, em.create(Transaction, {
-          type: TransactionType.DISPUTE_REFUND,
-          amount: Number(dispute.bondAmount),
-          balanceBefore,
-          balanceAfter: balanceBefore + Number(dispute.bondAmount),
-          userId: dispute.userId,
-          note: 'Dispute bond refund after market resolution',
-        }));
+        await em.save(
+          Transaction,
+          em.create(Transaction, {
+            type: TransactionType.DISPUTE_REFUND,
+            amount: Number(dispute.bondAmount),
+            balanceBefore,
+            balanceAfter: balanceBefore + Number(dispute.bondAmount),
+            userId: dispute.userId,
+            note: "Dispute bond refund after market resolution",
+          }),
+        );
         dispute.bondRefunded = true;
         await em.save(Dispute, dispute);
       });
     }
   }
 
-  // Settlement: distribute payouts 
+  // Settlement: distribute payouts
   private async settleMarket(
     market: Market,
     winner: Outcome,
@@ -309,28 +362,34 @@ export class ParimutuelEngine implements OnModuleInit {
           winningPositions++;
 
           const balanceBefore = await this.getCreditsBalance(em, bet.userId);
-          await em.save(Transaction, em.create(Transaction, {
-            type: TransactionType.POSITION_PAYOUT,
-            amount: payout,
-            balanceBefore,
-            balanceAfter: balanceBefore + payout,
-            positionId: bet.id,
-            userId: bet.userId,
-            note: `Payout for winning bet on: ${winner.label}`,
-          }));
+          await em.save(
+            Transaction,
+            em.create(Transaction, {
+              type: TransactionType.POSITION_PAYOUT,
+              amount: payout,
+              balanceBefore,
+              balanceAfter: balanceBefore + payout,
+              positionId: bet.id,
+              userId: bet.userId,
+              note: `Payout for winning bet on: ${winner.label}`,
+            }),
+          );
         } else if (market.status === MarketStatus.CANCELLED) {
           // Refund on cancellation via ledger entry
           bet.status = PositionStatus.REFUNDED;
           const balanceBefore = await this.getCreditsBalance(em, bet.userId);
-          await em.save(Transaction, em.create(Transaction, {
-            type: TransactionType.REFUND,
-            amount: Number(bet.amount),
-            balanceBefore,
-            balanceAfter: balanceBefore + Number(bet.amount),
-            positionId: bet.id,
-            userId: bet.userId,
-            note: 'Market cancelled — refund',
-          }));
+          await em.save(
+            Transaction,
+            em.create(Transaction, {
+              type: TransactionType.REFUND,
+              amount: Number(bet.amount),
+              balanceBefore,
+              balanceAfter: balanceBefore + Number(bet.amount),
+              positionId: bet.id,
+              userId: bet.userId,
+              note: "Market cancelled — refund",
+            }),
+          );
         } else {
           bet.status = PositionStatus.LOST;
         }
@@ -369,15 +428,38 @@ export class ParimutuelEngine implements OnModuleInit {
 
     const tiersBefore: Record<string, string> = {};
     for (const bet of bets) {
-      if (bet.user) tiersBefore[bet.userId] = bet.user.reputationTier ?? "newcomer";
+      if (bet.user)
+        tiersBefore[bet.userId] = bet.user.reputationTier ?? "newcomer";
     }
 
     // 2. Recalculate reputation for all bettors
     await this.reputationService.recalculateForMarket(market.id);
 
+    // 2b. Contrarian badge tracking
+    // A bet is "contrarian" if predictedProbability < 0.5 at placement
+    // (user bet on the outcome the signal said was less likely)
+    for (const bet of bets) {
+      if (
+        bet.status === PositionStatus.WON ||
+        bet.status === PositionStatus.LOST
+      ) {
+        await this.reputationService
+          .recordContrarianOutcome(
+            bet.userId,
+            (bet as any).predictedProbability != null
+              ? Number((bet as any).predictedProbability)
+              : null,
+            bet.status === PositionStatus.WON,
+          )
+          .catch(() => {});
+      }
+    }
+
     // 3. Reload updated users for tier-change detection
     const userIds = [...new Set(bets.map((b) => b.userId))];
-    const users = await this.dataSource.getRepository(User).findBy({ id: In(userIds) });
+    const users = await this.dataSource
+      .getRepository(User)
+      .findBy({ id: In(userIds) });
     const userMap: Record<string, User> = {};
     for (const u of users) userMap[u.id] = u;
 
@@ -394,12 +476,14 @@ export class ParimutuelEngine implements OnModuleInit {
       const tierNow = user.reputationTier ?? "newcomer";
       const tierBefore = tiersBefore[bet.userId] ?? "newcomer";
       const totalPredictions = user.totalPredictions ?? 0;
-      const accuracy = totalPredictions > 0 && user.reputationScore != null
-        ? `${Math.round(user.reputationScore * 100)}%`
-        : null;
+      const accuracy =
+        totalPredictions > 0 && user.reputationScore != null
+          ? `${Math.round(user.reputationScore * 100)}%`
+          : null;
 
       const tierOrder = ["newcomer", "regular", "reliable", "expert"];
-      const tierUpgraded = tierOrder.indexOf(tierNow) > tierOrder.indexOf(tierBefore);
+      const tierUpgraded =
+        tierOrder.indexOf(tierNow) > tierOrder.indexOf(tierBefore);
 
       if (bet.status === PositionStatus.WON) {
         const share = winnerPool > 0 ? Number(bet.amount) / winnerPool : 0;
@@ -412,38 +496,66 @@ export class ParimutuelEngine implements OnModuleInit {
           `🎯 Your pick: <b>${winner.label}</b>\n` +
           `💰 Payout: <b>Nu ${payout.toLocaleString()}</b> (+Nu ${profit})\n`;
 
-        if (accuracy) msg += `⭐ Accuracy: <b>${accuracy}</b> over ${totalPredictions} predictions\n`;
-        if (tierUpgraded) msg += `\n🏆 <b>Tier upgrade! You are now ${tierNow.charAt(0).toUpperCase() + tierNow.slice(1)}.</b>`;
+        if (accuracy)
+          msg += `⭐ Accuracy: <b>${accuracy}</b> over ${totalPredictions} predictions\n`;
+        if (tierUpgraded)
+          msg += `\n🏆 <b>Tier upgrade! You are now ${tierNow.charAt(0).toUpperCase() + tierNow.slice(1)}.</b>`;
+
+        // Contrarian badge notification
+        const updatedUser = await this.dataSource.getRepository(User).findOne({
+          where: { id: user.id },
+          select: ["contrarianBadge", "contrarianWins", "contrarianAttempts"],
+        });
+        const contrarianBadge = updatedUser?.contrarianBadge;
+        const prevBadge = user.contrarianBadge ?? null;
+        if (contrarianBadge && contrarianBadge !== prevBadge) {
+          const badgeEmoji =
+            contrarianBadge === "gold"
+              ? "🥇"
+              : contrarianBadge === "silver"
+                ? "🥈"
+                : "🥉";
+          msg += `\n\n${badgeEmoji} <b>Contrarian ${contrarianBadge.charAt(0).toUpperCase() + contrarianBadge.slice(1)} badge earned!</b> You went against the crowd and won. ${updatedUser?.contrarianWins} contrarian wins so far.`;
+        }
 
         await this.telegramSimple.sendMessage(chatId, msg).catch(() => {});
 
         // Streak update
         const currentStreak = (user.telegramStreak ?? 0) + 1;
-        await this.dataSource.getRepository(User).update(user.id, { telegramStreak: currentStreak });
+        await this.dataSource
+          .getRepository(User)
+          .update(user.id, { telegramStreak: currentStreak });
         if (currentStreak >= 3) {
-          await this.telegramSimple.sendMessage(
-            chatId,
-            `🔥 <b>${currentStreak} correct in a row, ${firstName}!</b> You're on fire.`,
-          ).catch(() => {});
+          await this.telegramSimple
+            .sendMessage(
+              chatId,
+              `🔥 <b>${currentStreak} correct in a row, ${firstName}!</b> You're on fire.`,
+            )
+            .catch(() => {});
         }
-
       } else if (bet.status === PositionStatus.LOST) {
         const outcome = market.outcomes.find((o) => o.id === bet.outcomeId);
 
         let msg =
-          `❌ <b>Not this time.</b>\n\n` +
+          `🙂‍↕️<b>Not this time.</b>\n\n` +
           `📊 ${market.title}\n` +
           `🎯 Your pick: ${outcome?.label ?? "unknown"} · Winner: <b>${winner.label}</b>\n`;
 
-        if (accuracy) msg += `⭐ Accuracy: <b>${accuracy}</b> over ${totalPredictions} predictions\n`;
+        if (accuracy)
+          msg += `⭐ Accuracy: <b>${accuracy}</b> over ${totalPredictions} predictions\n`;
         msg += `\n💡 Every prediction builds your reputation. Keep going.`;
 
         await this.telegramSimple.sendMessage(chatId, msg).catch(() => {});
-        await this.dataSource.getRepository(User).update(user.id, { telegramStreak: 0 }).catch(() => {});
+        await this.dataSource
+          .getRepository(User)
+          .update(user.id, { telegramStreak: 0 })
+          .catch(() => {});
       }
     }
 
-    this.logger.log(`[Notify] Settlement DMs sent for market ${market.id} to ${bets.length} bettors`);
+    this.logger.log(
+      `[Notify] Settlement DMs sent for market ${market.id} to ${bets.length} bettors`,
+    );
   }
 
   // Cancel market: refund all bets
@@ -462,15 +574,18 @@ export class ParimutuelEngine implements OnModuleInit {
       for (const bet of bets) {
         if (bet.status === PositionStatus.PENDING) {
           const balanceBefore = await this.getCreditsBalance(em, bet.userId);
-          await em.save(Transaction, em.create(Transaction, {
-            type: TransactionType.REFUND,
-            amount: Number(bet.amount),
-            balanceBefore,
-            balanceAfter: balanceBefore + Number(bet.amount),
-            positionId: bet.id,
-            userId: bet.userId,
-            note: 'Market cancelled — refund',
-          }));
+          await em.save(
+            Transaction,
+            em.create(Transaction, {
+              type: TransactionType.REFUND,
+              amount: Number(bet.amount),
+              balanceBefore,
+              balanceAfter: balanceBefore + Number(bet.amount),
+              positionId: bet.id,
+              userId: bet.userId,
+              note: "Market cancelled — refund",
+            }),
+          );
           bet.status = PositionStatus.REFUNDED;
           await em.save(Position, bet);
         }
