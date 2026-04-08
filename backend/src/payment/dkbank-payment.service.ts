@@ -42,7 +42,7 @@ const TG_OTP_TTL_S = 60;
 
 export interface DKBankPaymentRequest {
   amount: number;
-  customerPhone: string; // CID number for DK lookup
+  cid: string; // 11-digit Bhutanese CID — used to look up the DK Bank account
   customerName?: string;
   description: string;
   merchantTxnId?: string;
@@ -109,10 +109,10 @@ export class DKBankPaymentService {
       throw new BadRequestException("Amount must be a positive number");
     }
     const cid =
-      typeof dto.customerPhone === "string"
-        ? dto.customerPhone.trim().replace(/\s+/g, "").replace(/[^\d]/g, "")
+      typeof dto.cid === "string"
+        ? dto.cid.trim().replace(/\s+/g, "").replace(/[^\d]/g, "")
         : "";
-    if (!cid) throw new BadRequestException("customerPhone (CID) is required");
+    if (!cid) throw new BadRequestException("cid is required");
     if (!dto.description || typeof dto.description !== "string") {
       throw new BadRequestException("description is required");
     }
@@ -196,7 +196,9 @@ export class DKBankPaymentService {
     // The Telegram OTP is the user-facing confirmation gate.
     // Security is backed by: CID ownership + Telegram phone == DK phone (verified on linking).
     {
-      const generatedOtp = String(100000 + (randomBytes(3).readUIntBE(0, 3) % 900000));
+      const generatedOtp = String(
+        100000 + (randomBytes(3).readUIntBE(0, 3) % 900000),
+      );
       const now = new Date();
       const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
 
@@ -312,7 +314,8 @@ export class DKBankPaymentService {
     if (tgOtpSession.userId !== userId) {
       throw new BadRequestException("Payment not found.");
     }
-    const otpValid = tgOtpSession.otp.length === otp.length &&
+    const otpValid =
+      tgOtpSession.otp.length === otp.length &&
       timingSafeEqual(Buffer.from(tgOtpSession.otp), Buffer.from(otp));
     if (!otpValid) {
       if (otpRecord) {
@@ -581,5 +584,323 @@ export class DKBankPaymentService {
 
       await em.save(payment);
     });
+  }
+
+  // ── Withdrawal: merchant vault → user DK Bank account ─────────────────────
+
+  /**
+   * Step 1 — Withdrawal initiation.
+   * Validates that the user has a linked DK account and sufficient in-app
+   * credit balance, then creates a PENDING withdrawal payment record and
+   * sends a Telegram OTP as the confirmation gate.
+   *
+   * No funds leave the merchant vault until confirmWithdrawal succeeds.
+   */
+  async initiateWithdrawal(
+    userId: string,
+    dto: { amount: number },
+  ): Promise<PaymentInitiateResponse> {
+    const amount = Number(dto.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestException(
+        "Withdrawal amount must be a positive number",
+      );
+    }
+
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException("User not found");
+
+    if (!user.dkAccountNumber || !user.dkCid) {
+      throw new BadRequestException(
+        "You have not linked a DK Bank account yet. " +
+          "Please go to Profile → Link DK Bank Account first.",
+      );
+    }
+
+    // ── Check in-app credit balance ───────────────────────────────────────────
+    // Must happen outside a write-lock — this is a pre-flight read.
+    // The authoritative balance check is repeated inside confirmWithdrawal
+    // under pessimistic_write lock to prevent TOCTOU races.
+    let balance = 0;
+    await this.dataSource.transaction(async (em) => {
+      const { balance: rawBalance } = await em
+        .getRepository(Transaction)
+        .createQueryBuilder("t")
+        .select("COALESCE(SUM(t.amount), 0)", "balance")
+        .where("t.userId = :userId", { userId })
+        .getRawOne();
+      balance = Number(rawBalance);
+    });
+
+    if (balance < amount) {
+      throw new BadRequestException(
+        `Insufficient balance. You have Nu ${balance.toFixed(2)} but requested Nu ${amount.toFixed(2)}.`,
+      );
+    }
+
+    // ── Create PENDING withdrawal payment record ───────────────────────────
+    const payment = this.paymentRepo.create({
+      type: PaymentType.WITHDRAWAL,
+      status: PaymentStatus.PENDING,
+      method: PaymentMethod.DK_BANK,
+      amount,
+      currency: "BTN",
+      description: "Withdrawal to DK Bank account",
+      userId: user.id,
+      metadata: {
+        dkAccountNumber: user.dkAccountNumber,
+        dkAccountName: user.dkAccountName ?? null,
+        initiatedAt: new Date().toISOString(),
+      },
+    });
+    await this.paymentRepo.save(payment);
+
+    // ── Generate and send Telegram OTP ────────────────────────────────────
+    const { randomBytes } = await import("crypto");
+    const generatedOtp = String(
+      100000 + (randomBytes(3).readUIntBE(0, 3) % 900000),
+    );
+    const now = new Date();
+
+    await this.redis.setJsonEx<{ otp: string; userId: string }>(
+      `tara:tg-otp:${payment.id}`,
+      TG_OTP_TTL_S,
+      { otp: generatedOtp, userId },
+    );
+
+    await this.otpRepo.save(
+      this.otpRepo.create({
+        paymentId: payment.id,
+        userId,
+        status: OtpStatus.PENDING,
+        expiresAt: new Date(now.getTime() + OTP_TTL_MS),
+        lastRequestedAt: now,
+        verifiedAt: null,
+        requestCount: 1,
+        failedAttempts: 0,
+        bfsTxnId: null,
+      }),
+    );
+
+    const firstName = user.firstName?.trim() || "there";
+    await this.telegramService
+      .sendMessage(
+        Number(user.telegramId),
+        `🏦 <b>Tara Withdrawal OTP</b>\n\nHi ${firstName}, your one-time code to withdraw <b>Nu ${amount.toLocaleString()}</b> to your DK Bank account:\n\n<code>${generatedOtp}</code>\n\n⏳ Expires in 1 minute\n\n⚠️ <b>Tara will never ask for this code.</b> Do not share it with anyone.`,
+      )
+      .catch((err) =>
+        this.logger.warn(
+          `Failed to send withdrawal OTP via Telegram: ${err.message}`,
+        ),
+      );
+
+    return {
+      success: true,
+      paymentId: payment.id,
+      status: "pending",
+      amount,
+      currency: "BTN",
+      method: "dkbank",
+      message:
+        "OTP sent to your Telegram. Please enter it to confirm the withdrawal.",
+      timestamp: now.toISOString(),
+      otpRequired: true,
+    };
+  }
+
+  /**
+   * Step 2 — Withdrawal confirmation.
+   * Validates the Telegram OTP, then inside a single atomic DB transaction:
+   *   1. Re-checks balance under pessimistic_write lock (prevents TOCTOU)
+   *   2. Calls DK Gateway to push funds from merchant vault → user DK account
+   *   3. Only if DK transfer succeeds: writes the WITHDRAWAL debit ledger entry
+   *      and marks the payment SUCCESS
+   *
+   * If the DK transfer fails or throws, the transaction rolls back — no debit
+   * is written and the merchant vault balance is unchanged.
+   */
+  async confirmWithdrawal(
+    userId: string,
+    paymentId: string,
+    otp: string,
+  ): Promise<PaymentInitiateResponse> {
+    const payment = await this.paymentRepo.findOne({
+      where: { id: paymentId, userId },
+    });
+    if (!payment) throw new NotFoundException("Payment not found");
+    if (payment.status !== PaymentStatus.PENDING) {
+      throw new BadRequestException(`Withdrawal is already ${payment.status}`);
+    }
+
+    const MAX_OTP_ATTEMPTS = 5;
+
+    // ── OTP lockout check ────────────────────────────────────────────────────
+    const otpRecord = await this.otpRepo.findOne({
+      where: { paymentId, userId },
+      order: { createdAt: "DESC" },
+    });
+    if (otpRecord && otpRecord.failedAttempts >= MAX_OTP_ATTEMPTS) {
+      throw new BadRequestException(
+        "Too many incorrect OTP attempts. Please initiate a new withdrawal.",
+      );
+    }
+
+    // ── Telegram OTP validation ──────────────────────────────────────────────
+    const tgOtpSession = await this.redis.getJson<{
+      otp: string;
+      userId: string;
+    }>(`tara:tg-otp:${paymentId}`);
+    if (!tgOtpSession) {
+      throw new BadRequestException(
+        "OTP has expired. Please initiate a new withdrawal.",
+      );
+    }
+    if (tgOtpSession.userId !== userId) {
+      throw new BadRequestException("Payment not found.");
+    }
+
+    const { timingSafeEqual } = await import("crypto");
+    const otpValid =
+      tgOtpSession.otp.length === otp.length &&
+      timingSafeEqual(Buffer.from(tgOtpSession.otp), Buffer.from(otp));
+
+    if (!otpValid) {
+      if (otpRecord) {
+        otpRecord.failedAttempts += 1;
+        await this.otpRepo.save(otpRecord);
+      }
+      throw new BadRequestException(
+        "Invalid OTP. Please check your Telegram and try again.",
+      );
+    }
+
+    // OTP is valid — delete it immediately to prevent replay
+    await this.redis.del(`tara:tg-otp:${paymentId}`);
+
+    // ── Atomic: balance re-check + DK transfer + ledger debit ────────────────
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const withdrawalAmount = Number(payment.amount);
+
+    const result: { status: "success" | "failed"; failureReason?: string } = {
+      status: "success",
+    };
+
+    await this.dataSource.transaction(async (em) => {
+      // Pessimistic lock: re-read payment to prevent concurrent withdrawal attempts
+      const lockedPayment = await em
+        .getRepository(Payment)
+        .createQueryBuilder("p")
+        .setLock("pessimistic_write")
+        .where("p.id = :id", { id: paymentId })
+        .andWhere("p.userId = :userId", { userId })
+        .getOne();
+      if (!lockedPayment) throw new NotFoundException("Payment not found");
+      if (lockedPayment.status !== PaymentStatus.PENDING) {
+        throw new BadRequestException(
+          `Withdrawal is already ${lockedPayment.status}`,
+        );
+      }
+
+      // Re-check balance under lock (authoritative TOCTOU guard)
+      const { balance: rawBalance } = await em
+        .getRepository(Transaction)
+        .createQueryBuilder("t")
+        .select("COALESCE(SUM(t.amount), 0)", "balance")
+        .where("t.userId = :userId", { userId })
+        .getRawOne();
+      const balanceBefore = Number(rawBalance);
+
+      if (balanceBefore < withdrawalAmount) {
+        throw new BadRequestException(
+          `Insufficient balance. Available: Nu ${balanceBefore.toFixed(2)}.`,
+        );
+      }
+
+      // ── Call DK Gateway: push funds from merchant vault to user account ───
+      const transferResult = await this.dkGateway.transferToAccount({
+        accountNumber:
+          user?.dkAccountNumber ?? lockedPayment.metadata?.dkAccountNumber,
+        amount: withdrawalAmount,
+        currency: "BTN",
+        reference: lockedPayment.id,
+        description: `Tara withdrawal for user ${userId}`,
+      });
+
+      const transferSucceeded =
+        typeof transferResult?.status === "string" &&
+        transferResult.status.toUpperCase().includes("SUCCESS");
+
+      if (!transferSucceeded) {
+        // DK returned a failure response — mark payment FAILED, no debit written
+        lockedPayment.status = PaymentStatus.FAILED;
+        lockedPayment.failureReason =
+          transferResult?.statusDesc || "DK Bank transfer failed";
+        lockedPayment.confirmedAt = new Date();
+        await em.save(lockedPayment);
+        result.status = "failed";
+        result.failureReason = lockedPayment.failureReason ?? undefined;
+        return; // exit transaction without writing debit
+      }
+
+      // ── DK transfer succeeded — write the ledger debit ───────────────────
+      await em.save(
+        Transaction,
+        em.create(Transaction, {
+          type: TransactionType.WITHDRAWAL,
+          amount: -withdrawalAmount, // negative = debit from in-app balance
+          balanceBefore,
+          balanceAfter: balanceBefore - withdrawalAmount,
+          paymentId: lockedPayment.id,
+          userId,
+          note: `DK Bank withdrawal confirmed (txn: ${transferResult?.txnId ?? "n/a"})`,
+        }),
+      );
+
+      lockedPayment.status = PaymentStatus.SUCCESS;
+      lockedPayment.confirmedAt = new Date();
+      lockedPayment.externalPaymentId = transferResult?.txnId ?? null;
+      lockedPayment.failureReason = null;
+      await em.save(lockedPayment);
+    });
+
+    // ── Cleanup ──────────────────────────────────────────────────────────────
+    if (otpRecord) {
+      otpRecord.status = OtpStatus.VERIFIED;
+      otpRecord.verifiedAt = new Date();
+      await this.otpRepo.save(otpRecord);
+    }
+    await this.redis.del(`tara:otp:${paymentId}`);
+    await this.redis.del(`tara:cache:balance:${userId}`);
+
+    if (result.status === "failed") {
+      await this.paymentRepo.save(
+        Object.assign(payment, {
+          status: PaymentStatus.FAILED,
+          failureReason: result.failureReason,
+        }),
+      );
+      return {
+        success: false,
+        paymentId: payment.id,
+        status: "failed",
+        amount: withdrawalAmount,
+        currency: payment.currency,
+        method: "dkbank",
+        message: result.failureReason ?? "Withdrawal failed",
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    return {
+      success: true,
+      paymentId: payment.id,
+      status: "success",
+      amount: withdrawalAmount,
+      currency: payment.currency,
+      method: "dkbank",
+      message:
+        "Withdrawal confirmed. Funds are on their way to your DK Bank account.",
+      timestamp: new Date().toISOString(),
+    };
   }
 }

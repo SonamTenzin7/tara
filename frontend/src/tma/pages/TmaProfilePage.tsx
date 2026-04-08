@@ -8,6 +8,13 @@ import {
   AuthUser,
   Transaction,
 } from "@/api/client";
+import {
+  initiateDKBankDeposit,
+  confirmDKBankDeposit,
+  initiateDKBankWithdrawal,
+  confirmDKBankWithdrawal,
+  formatBTN,
+} from "@/api/dkbank";
 import { Page } from "@/tma/components/Page";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -29,10 +36,19 @@ import {
   Plus,
   ArrowUpCircle,
   Clock,
+  X,
+  Send,
 } from "lucide-react";
 
 type LinkStep = "idle" | "loading" | "success" | "error";
 type ActiveTab = "profile" | "wallet";
+type PaymentModalType = "deposit" | "withdraw" | null;
+type PaymentStep = "amount" | "otp" | "success" | "failed";
+
+const QUICK_DEPOSIT_AMOUNTS = [100, 200, 500, 1000];
+const QUICK_WITHDRAW_AMOUNTS = [100, 200, 500, 1000];
+const MIN_DEPOSIT = 50;
+const MIN_WITHDRAW = 50;
 
 const TX_ICON: Record<Transaction["type"], React.ReactNode> = {
   deposit: <ArrowDownLeft size={20} />,
@@ -134,6 +150,96 @@ export const TmaProfilePage: FC = () => {
   const [step, setStep] = useState<LinkStep>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [linkedName, setLinkedName] = useState("");
+
+  // ── Payment modal state ───────────────────────────────────────────────────
+  const [paymentModal, setPaymentModal] = useState<PaymentModalType>(null);
+  const [payStep, setPayStep] = useState<PaymentStep>("amount");
+  const [payAmountStr, setPayAmountStr] = useState("200");
+  const [payOtp, setPayOtp] = useState("");
+  const [payPendingId, setPayPendingId] = useState("");
+  const [payError, setPayError] = useState("");
+  const [payProcessing, setPayProcessing] = useState(false);
+  const [paySuccessMsg, setPaySuccessMsg] = useState("");
+
+  const openPaymentModal = (type: PaymentModalType) => {
+    setPaymentModal(type);
+    setPayStep("amount");
+    setPayAmountStr("200");
+    setPayOtp("");
+    setPayPendingId("");
+    setPayError("");
+    setPayProcessing(false);
+    setPaySuccessMsg("");
+  };
+
+  const closePaymentModal = () => {
+    setPaymentModal(null);
+    if (payStep === "success") refreshWallet();
+  };
+
+  const handlePaymentInitiate = async () => {
+    const amount = parseFloat(payAmountStr);
+    const minAmt = paymentModal === "deposit" ? MIN_DEPOSIT : MIN_WITHDRAW;
+    if (!Number.isFinite(amount) || amount < minAmt) {
+      setPayError(
+        `Minimum ${paymentModal === "deposit" ? "deposit" : "withdrawal"} is Nu ${minAmt}.`,
+      );
+      return;
+    }
+    setPayError("");
+    setPayProcessing(true);
+    try {
+      let res;
+      if (paymentModal === "deposit") {
+        if (!user?.dkCid) {
+          setPayError("Please link your DK Bank account first (Profile tab).");
+          setPayProcessing(false);
+          return;
+        }
+        res = await initiateDKBankDeposit({ amount, cid: user.dkCid });
+      } else {
+        res = await initiateDKBankWithdrawal({ amount });
+      }
+      setPayPendingId(res.paymentId);
+      setPayStep("otp");
+    } catch (err: any) {
+      setPayError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setPayProcessing(false);
+    }
+  };
+
+  const handlePaymentConfirm = async () => {
+    if (payOtp.length < 4) {
+      setPayError("Please enter the OTP sent to your Telegram.");
+      return;
+    }
+    setPayError("");
+    setPayProcessing(true);
+    try {
+      if (paymentModal === "deposit") {
+        await confirmDKBankDeposit(payPendingId, payOtp);
+      } else {
+        await confirmDKBankWithdrawal(payPendingId, payOtp);
+      }
+      setPaySuccessMsg(
+        paymentModal === "deposit"
+          ? `Nu ${parseFloat(payAmountStr).toLocaleString()} deposited successfully!`
+          : `Nu ${parseFloat(payAmountStr).toLocaleString()} withdrawal confirmed. Funds on their way to DK Bank.`,
+      );
+      setPayStep("success");
+    } catch (err: any) {
+      setPayError(err.message || "OTP confirmation failed. Please try again.");
+      if (
+        err.message?.toLowerCase().includes("expired") ||
+        err.message?.toLowerCase().includes("initiate")
+      ) {
+        setPayStep("failed");
+      }
+    } finally {
+      setPayProcessing(false);
+    }
+  };
 
   const hasDKBank = !!user?.dkCid;
   const hasPhoneVerified = !!user?.isPhoneVerified;
@@ -677,11 +783,17 @@ export const TmaProfilePage: FC = () => {
 
             {/* Action buttons */}
             <div style={walletStyles.walletActions}>
-              <button style={walletStyles.actionBtnPrimary}>
+              <button
+                style={walletStyles.actionBtnPrimary}
+                onClick={() => openPaymentModal("deposit")}
+              >
                 <Plus size={18} />
                 Deposit
               </button>
-              <button style={walletStyles.actionBtn}>
+              <button
+                style={walletStyles.actionBtn}
+                onClick={() => openPaymentModal("withdraw")}
+              >
                 <ArrowUpCircle size={18} />
                 Withdraw
               </button>
@@ -741,6 +853,357 @@ export const TmaProfilePage: FC = () => {
           </>
         )}
       </div>
+
+      {/* ── Payment Modal ───────────────────────────────────── */}
+      {paymentModal && (
+        <div
+          style={modalStyles.overlay}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closePaymentModal();
+          }}
+        >
+          <div style={modalStyles.sheet}>
+            {/* Header */}
+            <div style={modalStyles.header}>
+              <div style={modalStyles.headerLeft}>
+                <span
+                  style={{
+                    ...modalStyles.title,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {paymentModal === "deposit" ? "Deposit via" : "Withdraw to"}
+                  <span
+                    style={{
+                      background: "#fff",
+                      borderRadius: 5,
+                      padding: "2px 7px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <img
+                      src={dkBankLogo}
+                      alt="DK Bank"
+                      style={{ height: 18, width: "auto" }}
+                    />
+                  </span>
+                </span>
+              </div>
+              <button style={modalStyles.closeBtn} onClick={closePaymentModal}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* ── Step: Amount ── */}
+            {payStep === "amount" && (
+              <div style={modalStyles.body}>
+                {paymentModal === "deposit" && !user?.dkCid && (
+                  <div style={modalStyles.warningBox}>
+                    <AlertCircle size={14} color="#d97706" />
+                    <span>
+                      Link your DK Bank account (Profile tab) before depositing.
+                    </span>
+                  </div>
+                )}
+                {paymentModal === "withdraw" && !user?.dkCid && (
+                  <div style={modalStyles.warningBox}>
+                    <AlertCircle size={14} color="#d97706" />
+                    <span>You need a linked DK Bank account to withdraw.</span>
+                  </div>
+                )}
+
+                <p style={modalStyles.label}>
+                  {paymentModal === "deposit"
+                    ? "Top-up amount (BTN)"
+                    : "Withdrawal amount (BTN)"}
+                </p>
+                <input
+                  style={modalStyles.input}
+                  type="number"
+                  inputMode="numeric"
+                  min={paymentModal === "deposit" ? MIN_DEPOSIT : MIN_WITHDRAW}
+                  placeholder="Enter amount"
+                  value={payAmountStr}
+                  onChange={(e) => {
+                    setPayAmountStr(e.target.value);
+                    setPayError("");
+                  }}
+                />
+
+                <div style={modalStyles.quickRow}>
+                  {(paymentModal === "deposit"
+                    ? QUICK_DEPOSIT_AMOUNTS
+                    : QUICK_WITHDRAW_AMOUNTS
+                  ).map((amt) => (
+                    <button
+                      key={amt}
+                      style={{
+                        ...modalStyles.quickBtn,
+                        ...(payAmountStr === String(amt)
+                          ? modalStyles.quickBtnActive
+                          : {}),
+                      }}
+                      onClick={() => {
+                        setPayAmountStr(String(amt));
+                        setPayError("");
+                      }}
+                    >
+                      {formatBTN(amt).replace("Nu. ", "Nu ")}
+                    </button>
+                  ))}
+                </div>
+
+                {paymentModal === "deposit" && user?.dkCid && (
+                  <div style={modalStyles.infoRow}>
+                    <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                      DK Account
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>
+                      {user.dkAccountName || user.dkCid}
+                    </span>
+                  </div>
+                )}
+                {paymentModal === "withdraw" && (
+                  <div style={modalStyles.infoRow}>
+                    <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                      Available balance
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>
+                      Nu{" "}
+                      {Number(
+                        freshUser?.creditsBalance ?? user?.creditsBalance ?? 0,
+                      ).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+
+                {payError && (
+                  <div style={modalStyles.errorBox}>
+                    <XCircle size={14} color="#dc2626" />
+                    <span>{payError}</span>
+                  </div>
+                )}
+
+                <button
+                  style={{
+                    ...modalStyles.primaryBtn,
+                    opacity:
+                      payProcessing ||
+                      (paymentModal === "deposit" ? !user?.dkCid : !user?.dkCid)
+                        ? 0.6
+                        : 1,
+                  }}
+                  disabled={payProcessing}
+                  onClick={handlePaymentInitiate}
+                >
+                  {payProcessing ? (
+                    <>
+                      <Loader2
+                        size={16}
+                        style={{ animation: "spin 0.8s linear infinite" }}
+                      />{" "}
+                      Sending OTP…
+                    </>
+                  ) : (
+                    <>
+                      <Send size={16} />{" "}
+                      {paymentModal === "deposit"
+                        ? "Deposit & Send OTP"
+                        : "Withdraw & Send OTP"}
+                    </>
+                  )}
+                </button>
+                <p style={modalStyles.hint}>
+                  An OTP will be sent to your Telegram chat to confirm this
+                  transaction.
+                </p>
+              </div>
+            )}
+
+            {/* ── Step: OTP ── */}
+            {payStep === "otp" && (
+              <div style={modalStyles.body}>
+                <div style={modalStyles.otpInfo}>
+                  <Send size={32} color="#2775d0" />
+                  <p
+                    style={{
+                      margin: "12px 0 4px",
+                      fontWeight: 700,
+                      fontSize: 16,
+                    }}
+                  >
+                    Check your Telegram
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      color: "var(--text-muted)",
+                      textAlign: "center",
+                    }}
+                  >
+                    We sent a 6-digit OTP to confirm your{" "}
+                    {paymentModal === "deposit"
+                      ? `deposit of `
+                      : `withdrawal of `}
+                    <strong>
+                      Nu {parseFloat(payAmountStr).toLocaleString()}
+                    </strong>
+                    .
+                  </p>
+                </div>
+
+                <input
+                  style={{
+                    ...modalStyles.input,
+                    textAlign: "center",
+                    letterSpacing: 10,
+                    fontSize: 22,
+                    fontWeight: 700,
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={8}
+                  placeholder="● ● ● ● ● ●"
+                  value={payOtp}
+                  onChange={(e) => {
+                    setPayOtp(e.target.value.replace(/\D/g, ""));
+                    setPayError("");
+                  }}
+                  autoFocus
+                />
+
+                {payError && (
+                  <div style={modalStyles.errorBox}>
+                    <XCircle size={14} color="#dc2626" />
+                    <span>{payError}</span>
+                  </div>
+                )}
+
+                <button
+                  style={{
+                    ...modalStyles.primaryBtn,
+                    opacity: payProcessing || payOtp.length < 4 ? 0.6 : 1,
+                  }}
+                  disabled={payProcessing || payOtp.length < 4}
+                  onClick={handlePaymentConfirm}
+                >
+                  {payProcessing ? (
+                    <>
+                      <Loader2
+                        size={16}
+                        style={{ animation: "spin 0.8s linear infinite" }}
+                      />{" "}
+                      Confirming…
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={16} /> Confirm
+                    </>
+                  )}
+                </button>
+                <button
+                  style={modalStyles.ghostBtn}
+                  onClick={() => {
+                    setPayStep("amount");
+                    setPayOtp("");
+                    setPayError("");
+                  }}
+                >
+                  ← Change amount
+                </button>
+              </div>
+            )}
+
+            {/* ── Step: Success ── */}
+            {payStep === "success" && (
+              <div
+                style={{
+                  ...modalStyles.body,
+                  alignItems: "center",
+                  textAlign: "center",
+                }}
+              >
+                <CheckCircle2
+                  size={56}
+                  color="#059669"
+                  style={{ marginBottom: 8 }}
+                />
+                <p style={{ fontWeight: 700, fontSize: 18, margin: "0 0 8px" }}>
+                  {paymentModal === "deposit"
+                    ? "Deposit Successful!"
+                    : "Withdrawal Confirmed!"}
+                </p>
+                <p
+                  style={{
+                    color: "var(--text-muted)",
+                    fontSize: 14,
+                    margin: "0 0 24px",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {paySuccessMsg}
+                </p>
+                <button
+                  style={modalStyles.primaryBtn}
+                  onClick={closePaymentModal}
+                >
+                  Done
+                </button>
+              </div>
+            )}
+
+            {/* ── Step: Failed ── */}
+            {payStep === "failed" && (
+              <div
+                style={{
+                  ...modalStyles.body,
+                  alignItems: "center",
+                  textAlign: "center",
+                }}
+              >
+                <XCircle
+                  size={56}
+                  color="#dc2626"
+                  style={{ marginBottom: 8 }}
+                />
+                <p style={{ fontWeight: 700, fontSize: 18, margin: "0 0 8px" }}>
+                  Transaction Failed
+                </p>
+                <p
+                  style={{
+                    color: "var(--text-muted)",
+                    fontSize: 14,
+                    margin: "0 0 24px",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {payError ||
+                    "The transaction could not be completed. Please try again."}
+                </p>
+                <button
+                  style={modalStyles.primaryBtn}
+                  onClick={() => {
+                    setPayStep("amount");
+                    setPayError("");
+                  }}
+                >
+                  Try Again
+                </button>
+                <button
+                  style={modalStyles.ghostBtn}
+                  onClick={closePaymentModal}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </Page>
   );
 };
@@ -974,7 +1437,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "14px",
     fontSize: 15,
     fontWeight: 700,
-    background: "linear-gradient(135deg, #2775d0, #1a5bb5)",
+    background: "linear-gradient(135deg, #00499cff, #1a5bb5)",
     color: "#fff",
     border: "none",
     borderRadius: 12,
@@ -1050,7 +1513,7 @@ const walletStyles: Record<string, React.CSSProperties> = {
     background: "var(--balance-card-bg)",
     borderRadius: 20,
     padding: "28px 20px",
-    color: "#fff",
+    color: "#ffffff",
     position: "relative",
     overflow: "hidden",
     boxShadow: "var(--balance-card-shadow)",
@@ -1207,5 +1670,172 @@ const walletStyles: Record<string, React.CSSProperties> = {
     gap: 12,
     padding: "40px 20px",
     color: "var(--text-muted)",
+  },
+};
+
+const modalStyles: Record<string, React.CSSProperties> = {
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.5)",
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  sheet: {
+    background: "var(--bg-card)",
+    borderRadius: "20px 20px 0 0",
+    width: "100%",
+    maxWidth: 480,
+    maxHeight: "90vh",
+    overflowY: "auto",
+    boxShadow: "0 -4px 40px rgba(0,0,0,0.25)",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "18px 16px 14px",
+    borderBottom: "1px solid var(--glass-border)",
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  title: {
+    fontWeight: 700,
+    fontSize: 16,
+    color: "var(--text-main)",
+  },
+  closeBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "var(--text-muted)",
+    padding: 4,
+    borderRadius: 8,
+    display: "flex",
+    alignItems: "center",
+  },
+  body: {
+    padding: "20px 16px 32px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+  },
+  label: {
+    margin: 0,
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
+  input: {
+    width: "100%",
+    padding: "14px",
+    fontSize: 18,
+    borderRadius: 12,
+    border: "1.5px solid var(--glass-border)",
+    background: "var(--bg-main)",
+    color: "var(--text-main)",
+    outline: "none",
+    boxSizing: "border-box" as const,
+    fontWeight: 700,
+  },
+  quickRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: 8,
+  },
+  quickBtn: {
+    padding: "10px 4px",
+    borderRadius: 10,
+    border: "1.5px solid var(--glass-border)",
+    background: "var(--bg-main)",
+    color: "var(--text-main)",
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: "pointer",
+    transition: "all 0.15s",
+  },
+  quickBtnActive: {
+    background: "linear-gradient(135deg, #2775d0, #1a5bb5)",
+    color: "#fff",
+    border: "1.5px solid transparent",
+  },
+  infoRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "10px 14px",
+    background: "var(--bg-main)",
+    borderRadius: 10,
+    border: "1px solid var(--glass-border)",
+  },
+  warningBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 14px",
+    background: "#fef3c7",
+    borderRadius: 10,
+    border: "1px solid #fcd34d",
+    fontSize: 13,
+    color: "#92400e",
+  },
+  errorBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 14px",
+    background: "#fee2e2",
+    borderRadius: 10,
+    border: "1px solid #fca5a5",
+    fontSize: 13,
+    color: "#991b1b",
+  },
+  primaryBtn: {
+    width: "100%",
+    padding: "15px",
+    borderRadius: 12,
+    border: "none",
+    background: "linear-gradient(135deg, #2775d0, #1a5bb5)",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: 15,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    transition: "opacity 0.2s",
+  },
+  ghostBtn: {
+    width: "100%",
+    padding: "12px",
+    borderRadius: 12,
+    border: "1.5px solid var(--glass-border)",
+    background: "transparent",
+    color: "var(--text-muted)",
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+    textAlign: "center" as const,
+  },
+  hint: {
+    margin: 0,
+    fontSize: 12,
+    color: "var(--text-muted)",
+    textAlign: "center" as const,
+    lineHeight: 1.5,
+  },
+  otpInfo: {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    padding: "8px 0 4px",
   },
 };

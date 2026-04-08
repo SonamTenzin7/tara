@@ -50,6 +50,7 @@ function makeService(user: any, allBets: any[], marketBets: any[] = allBets) {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue(allBets),
     }),
   };
@@ -129,21 +130,11 @@ describe("ReputationService.calcTier", () => {
 // ─── recalculateForUser: multiple bets on same market = ONE prediction ────────
 
 describe("ReputationService.recalculateForUser — multiple bets same market", () => {
-  it("counts a user who placed 3 bets on one market as 1 prediction (one WON)", async () => {
-    // User placed 3 bets on market-1 (e.g. 3 top-up + bet sequences)
-    // All 3 resolved as WON — should still be 1 correct prediction, not 3
+  it("counts a user who placed 3 bets on the SAME market as 1 prediction (deduplication)", async () => {
+    // User placed 3 bets on market-1 — same market, same outcome.
+    // One market = one prediction decision, so totalPredictions = 1, correctPredictions = 1.
     const user = makeUser();
 
-    // recalculateForUser loads ALL resolved bets via createQueryBuilder
-    // Each row = one resolved bet, so 3 WON bets on same market = 3 rows
-    // The service counts allBets.length as totalPredictions — this test
-    // documents the CURRENT behaviour and ensures the deduplication fix
-    // we made to computeMarketSignal is consistent with how recalculateForUser works.
-    //
-    // recalculateForUser counts each resolved bet row independently.
-    // The key behaviour tested here is that computeMarketSignal deduplicates
-    // (tested below). recalculateForUser intentionally counts each bet row
-    // because a user can bet on DIFFERENT outcomes in the same market.
     const allBets = [
       makeBet({
         id: "b1",
@@ -169,19 +160,17 @@ describe("ReputationService.recalculateForUser — multiple bets same market", (
     await svc.recalculateForUser("u1");
 
     const [, updatePayload] = mockUserRepo.update.mock.calls[0];
-    // 3 bets stored → 3 total, 3 correct
-    expect(updatePayload.totalPredictions).toBe(3);
-    expect(updatePayload.correctPredictions).toBe(3);
-    // Score is Bayesian-shrunk: raw=1.0, confidence=3/30=0.1 → ~0.55
+    // Deduplicated to 1 market → 1 prediction, 1 correct
+    expect(updatePayload.totalPredictions).toBe(1);
+    expect(updatePayload.correctPredictions).toBe(1);
     expect(updatePayload.reputationScore).toBeGreaterThan(0.5);
-    expect(updatePayload.reputationScore).toBeLessThan(0.6);
   });
 
-  it("a user with 1 WON and 1 LOST bet has 50% raw accuracy", async () => {
+  it("a user with bets on 2 different markets (1 WON, 1 LOST) has 50% raw accuracy", async () => {
     const user = makeUser();
     const allBets = [
-      makeBet({ id: "b1", status: PositionStatus.WON }),
-      makeBet({ id: "b2", status: PositionStatus.LOST }),
+      makeBet({ id: "b1", status: PositionStatus.WON, marketId: "m1" }),
+      makeBet({ id: "b2", status: PositionStatus.LOST, marketId: "m2" }),
     ];
 
     const { svc, mockUserRepo } = makeService(user, allBets);
@@ -192,6 +181,39 @@ describe("ReputationService.recalculateForUser — multiple bets same market", (
     expect(updatePayload.correctPredictions).toBe(1);
     // raw = 0.5, very low confidence → score ≈ 0.5
     expect(updatePayload.reputationScore).toBeCloseTo(0.5, 1);
+  });
+
+  it("3 bets on the same market where user switched outcome — last bet outcome decides WON/LOST", async () => {
+    // User bet YES, then NO, then YES again on the same market.
+    // Last bet (YES, WON) is the canonical prediction. Result: 1 prediction, 1 correct.
+    const user = makeUser();
+    const allBets = [
+      makeBet({
+        id: "b1",
+        status: PositionStatus.LOST,
+        marketId: "m1",
+        outcomeId: "o-NO",
+      }),
+      makeBet({
+        id: "b2",
+        status: PositionStatus.LOST,
+        marketId: "m1",
+        outcomeId: "o-YES",
+      }),
+      makeBet({
+        id: "b3",
+        status: PositionStatus.WON,
+        marketId: "m1",
+        outcomeId: "o-YES",
+      }),
+    ];
+
+    const { svc, mockUserRepo } = makeService(user, allBets);
+    await svc.recalculateForUser("u1");
+
+    const [, updatePayload] = mockUserRepo.update.mock.calls[0];
+    expect(updatePayload.totalPredictions).toBe(1);
+    expect(updatePayload.correctPredictions).toBe(1);
   });
 });
 
@@ -210,6 +232,7 @@ describe("ReputationService.computeMarketSignal — deduplication", () => {
         addSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
         getRawMany: jest.fn().mockResolvedValue(rows),
       }),
     };

@@ -28,12 +28,13 @@ export class InitiatePaymentDto {
   amount: number;
 
   @ApiProperty({
-    description: "Customer CID linked to DK Bank account",
+    description:
+      "Customer's 11-digit Bhutanese CID number linked to their DK Bank account",
     example: "11000000000",
   })
   @IsString()
   @IsNotEmpty()
-  customerPhone: string;
+  cid: string;
 
   @ApiProperty({
     description: "Market ID to link this payment to (optional)",

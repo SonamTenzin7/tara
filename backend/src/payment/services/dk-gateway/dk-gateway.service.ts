@@ -584,12 +584,80 @@ export class DKGatewayService {
     }>("/v1/client_inquiry", dto, true);
   }
 
+  /**
+   * Merchant vault → user DK Bank account (withdrawal / payout transfer).
+   *
+   * Calls DK Bank's fund-transfer endpoint to push Ngultrum from the Tara
+   * merchant account to a user's DK account. This is the real-money leg of
+   * the withdrawal flow — it only runs after OTP verification and after the
+   * in-app ledger debit has been validated inside an atomic DB transaction.
+   *
+   * Returns a normalised result so callers can branch on `status === "SUCCESS"`.
+   */
+  async transferToAccount(params: {
+    accountNumber: string;
+    amount: number;
+    currency?: string;
+    reference: string;
+    description?: string;
+  }): Promise<{
+    txnId: string | null;
+    status: string;
+    statusDesc: string;
+    raw?: unknown;
+  }> {
+    const body = {
+      beneficiary_account: params.accountNumber,
+      beneficiary_name: params.description ?? "Tara withdrawal",
+      amount: params.amount.toFixed(2),
+      currency: params.currency ?? "BTN",
+      source_app: this.sourceApp,
+      bank_code: this.bankCode,
+      reference_number: params.reference,
+      remarks: params.description ?? "Tara platform withdrawal",
+      transaction_id: randomUUID(),
+    };
+
+    let raw: any;
+    try {
+      raw = await this.dkPost<{
+        response_code: string;
+        response_message?: string;
+        response_description?: string;
+        response_data?: { transaction_id?: string; txn_id?: string };
+      }>("/v1/fund_transfer", body, true);
+    } catch (err: any) {
+      throw new Error(
+        `DK Bank transfer failed: ${err?.message ?? "unknown error"}`,
+      );
+    }
+
+    const success =
+      raw?.response_code === DK_RESPONSE_CODES.SUCCESS ||
+      (raw?.response_message ?? "").toUpperCase().includes("SUCCESS");
+
+    return {
+      txnId:
+        raw?.response_data?.transaction_id ??
+        raw?.response_data?.txn_id ??
+        null,
+      status: success ? "SUCCESS" : "FAILED",
+      statusDesc:
+        raw?.response_description ??
+        raw?.response_message ??
+        (success ? "Transfer completed" : "Transfer failed"),
+      raw,
+    };
+  }
+
   verifyWebhookSignature(
     body: unknown,
     signatureHeader: string | undefined,
   ): boolean {
     if (!this.webhookSecret)
-      throw new Error("DK_WEBHOOK_SECRET is not configured — refusing to accept unsigned webhook");
+      throw new Error(
+        "DK_WEBHOOK_SECRET is not configured — refusing to accept unsigned webhook",
+      );
     if (!signatureHeader?.trim()) return false;
     // Use canonicalized JSON (sorted keys) so property order differences don't
     // cause valid payloads to fail verification

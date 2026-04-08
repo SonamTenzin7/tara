@@ -129,7 +129,7 @@ export function DKBankConfirmModal({
     try {
       const req: DKBankPaymentRequest = {
         amount,
-        customerPhone: cidNumber,
+        cid: cidNumber,
         customerName: customerName || undefined,
         description: `Predict: ${market.title} — ${outcome?.label}`,
         merchantTxnId: `TARA_BET_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,

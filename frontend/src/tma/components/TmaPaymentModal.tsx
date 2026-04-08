@@ -72,6 +72,19 @@ export function TmaPaymentModal({
   }, []);
 
   const outcome = market.outcomes.find((o) => o.id === outcomeId);
+
+  // Derive the outcome color using the same rank-based logic as the feed card
+  const outcomeColor = (() => {
+    const sorted = [...market.outcomes].sort(
+      (a, b) => Number(b.totalBetAmount) - Number(a.totalBetAmount),
+    );
+    const rank = sorted.findIndex((o) => o.id === outcomeId);
+    const total = market.outcomes.length;
+    if (rank === 0) return "#22c55e";
+    if (rank === total - 1 && total > 1) return "#ef4444";
+    return "#f59e0b";
+  })();
+
   const betAmount = parseFloat(amountStr) || 0;
   const isValidAmount = betAmount >= MIN_BET;
   // Payment is only allowed when using the user's own linked CID
@@ -124,7 +137,7 @@ export function TmaPaymentModal({
     try {
       const req: DKBankPaymentRequest = {
         amount: betAmount,
-        customerPhone: cidNumber,
+        cid: cidNumber,
         customerName: customerName || undefined,
         description: `Predict: ${market.title} — ${outcome?.label}`,
         merchantTxnId: `TARA_TMA_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -619,8 +632,8 @@ export function TmaPaymentModal({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
-                    background: "rgba(59, 130, 246, 0.1)",
-                    border: "1px solid rgba(59, 130, 246, 0.3)",
+                    background: `${outcomeColor}1a`,
+                    border: `1px solid ${outcomeColor}4d`,
                     borderRadius: 20,
                     padding: "4px 12px",
                   }}
@@ -630,12 +643,16 @@ export function TmaPaymentModal({
                       width: 7,
                       height: 7,
                       borderRadius: "50%",
-                      background: "#3b82f6",
+                      background: outcomeColor,
                       flexShrink: 0,
                     }}
                   />
                   <span
-                    style={{ fontSize: 13, fontWeight: 600, color: "#3b82f6" }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: outcomeColor,
+                    }}
                   >
                     {outcome?.label}
                   </span>

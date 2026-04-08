@@ -75,7 +75,7 @@ export const ResolvedMarketsPage: FC = () => {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    <span style={{ fontWeight: 800, color: "#22c55e", fontSize: "0.85rem" }}>{m.winner.label}</span>
+                    <span style={{ fontWeight: 800, color: "#31eb78ff", fontSize: "0.85rem" }}>{m.winner.label}</span>
                   </div>
                 )}
 

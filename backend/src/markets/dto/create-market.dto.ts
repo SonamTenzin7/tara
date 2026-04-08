@@ -22,7 +22,11 @@ export class CreateMarketDto {
   @Min(0)
   @Max(50)
   houseEdgePct?: number;
-  @ApiPropertyOptional() @IsOptional() @IsNumber() liquidityParam?: number;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(100)
+  liquidityParam?: number;
 
   @ApiProperty({
     type: [String],

@@ -89,6 +89,12 @@ export class ReputationService {
   /**
    * Recalculates all reputation dimensions for one user.
    * Safe to call multiple times — always derives from canonical history.
+   *
+   * Deduplication: one market = one prediction decision.
+   * When a user places multiple bets on the same market, only their LAST
+   * position (by placedAt) is counted for accuracy and Brier score.
+   * Splitting a stake into many small bets must not inflate prediction count
+   * or skew calibration.
    */
   async recalculateForUser(
     userId: string,
@@ -104,17 +110,26 @@ export class ReputationService {
       .andWhere("b.status IN (:...statuses)", {
         statuses: [PositionStatus.WON, PositionStatus.LOST],
       })
+      .orderBy("b.placedAt", "ASC") // ASC so the last entry wins when deduplicating
       .getMany();
 
-    const totalPredictions = allPositions.length;
-    const correctPredictions = allPositions.filter(
+    // ── Deduplicate: one prediction per market (last bet placed wins) ─────────
+    // Multiple bets on the same market are one decision, not many predictions.
+    const perMarket = new Map<string, (typeof allPositions)[0]>();
+    for (const bet of allPositions) {
+      perMarket.set(bet.marketId, bet); // later entries overwrite earlier ones
+    }
+    const dedupedPositions = Array.from(perMarket.values());
+
+    const totalPredictions = dedupedPositions.length;
+    const correctPredictions = dedupedPositions.filter(
       (b) => b.status === PositionStatus.WON,
     ).length;
 
     // ── Per-category breakdown ───────────────────────────────────────────────
     const categoryScores: Record<string, { correct: number; total: number }> =
       {};
-    for (const bet of allPositions) {
+    for (const bet of dedupedPositions) {
       const cat = (bet.market as any)?.category ?? "other";
       if (!categoryScores[cat]) categoryScores[cat] = { correct: 0, total: 0 };
       categoryScores[cat].total += 1;
@@ -123,7 +138,8 @@ export class ReputationService {
 
     // ── Brier score calibration (Feature 3) ──────────────────────────────────
     // Only positions that have a recorded predictedProbability contribute.
-    const calibrated = allPositions.filter(
+    // Uses the deduplicated set — one Brier observation per market.
+    const calibrated = dedupedPositions.filter(
       (b) => (b as any).predictedProbability != null,
     );
     let brierScore: number | null = null;
@@ -210,6 +226,7 @@ export class ReputationService {
           PositionStatus.LOST,
         ],
       })
+      .orderBy("b.placedAt", "ASC") // ASC so last row per user overwrites earlier ones
       .getRawMany();
 
     const uniqueBettors = new Set(rows.map((r) => r.userId)).size;
@@ -286,6 +303,7 @@ export class ReputationService {
       .addSelect("u.reputationScore", "reputationScore")
       .addSelect("u.brierScore", "brierScore")
       .addSelect("u.lastActiveAt", "lastActiveAt")
+      .addSelect("b.userId", "userId")
       .where("b.marketId = :marketId", { marketId })
       .andWhere("b.status IN (:...statuses)", {
         statuses: [
@@ -296,20 +314,45 @@ export class ReputationService {
       })
       .getRawMany();
 
-    const weightedShares: Record<string, number> = {};
+    // ── Step 1: aggregate total stake per user per outcome ────────────────────
+    // A user who places 3 × Nu 200 bets on YES has staked Nu 600 total on YES.
+    // The reputation multiplier is applied once to that total — not once per bet.
+    // This prevents signal amplification from bet-splitting.
+    const userOutcomeStake: Record<
+      string,
+      {
+        outcomeId: string;
+        totalAmount: number;
+        reputationScore: number;
+        brierScore: number | null;
+        lastActiveAt: Date | null;
+      }
+    > = {};
+
     for (const row of rows) {
-      const score = Number(row.reputationScore ?? 0.5);
-      const decay = this.decayFactor(
-        row.lastActiveAt ? new Date(row.lastActiveAt) : null,
-      );
-      const calibration = this.calibrationMultiplier(
-        row.brierScore != null ? Number(row.brierScore) : null,
-      );
+      const key = `${row.userId}:${row.outcomeId}`;
+      if (!userOutcomeStake[key]) {
+        userOutcomeStake[key] = {
+          outcomeId: row.outcomeId,
+          totalAmount: 0,
+          reputationScore: Number(row.reputationScore ?? 0.5),
+          brierScore: row.brierScore != null ? Number(row.brierScore) : null,
+          lastActiveAt: row.lastActiveAt ? new Date(row.lastActiveAt) : null,
+        };
+      }
+      userOutcomeStake[key].totalAmount += Number(row.amount);
+    }
+
+    // ── Step 2: apply reputation multiplier once per user-outcome pair ────────
+    const weightedShares: Record<string, number> = {};
+    for (const entry of Object.values(userOutcomeStake)) {
+      const decay = this.decayFactor(entry.lastActiveAt);
+      const calibration = this.calibrationMultiplier(entry.brierScore);
       // multiplier: 0.5 + score gives range [0.5, 1.5] for score in [0, 1]
-      const multiplier = (0.5 + score) * decay * calibration;
-      const effective = Number(row.amount) * multiplier;
-      weightedShares[row.outcomeId] =
-        (weightedShares[row.outcomeId] || 0) + effective;
+      const multiplier = (0.5 + entry.reputationScore) * decay * calibration;
+      const effective = entry.totalAmount * multiplier;
+      weightedShares[entry.outcomeId] =
+        (weightedShares[entry.outcomeId] || 0) + effective;
     }
     return weightedShares;
   }

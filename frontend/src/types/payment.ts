@@ -6,8 +6,8 @@
 export interface PaymentMethod {
   id: string;
   name: string;
-  type: 'dkbank' | 'ton' | 'credits';
-  currency: 'BTN' | 'USDT' | 'CREDITS';
+  type: "dkbank" | "ton" | "credits";
+  currency: "BTN" | "USDT" | "CREDITS";
   enabled: boolean;
   icon?: string;
   minAmount: number;
@@ -16,7 +16,7 @@ export interface PaymentMethod {
 
 export interface PaymentRequest {
   amount: number;
-  currency: 'BTN' | 'USDT' | 'CREDITS';
+  currency: "BTN" | "USDT" | "CREDITS";
   method: PaymentMethod;
   description: string;
   metadata?: Record<string, any>;
@@ -24,7 +24,7 @@ export interface PaymentRequest {
 
 export interface DKBankPaymentRequest {
   amount: number; // in BTN
-  customerPhone: string;
+  cid: string; // 11-digit Bhutanese CID number
   customerName?: string;
   description: string;
   merchantTxnId?: string;
@@ -33,7 +33,7 @@ export interface DKBankPaymentRequest {
 export interface DKBankResponse {
   success: boolean;
   txnId?: string;
-  status?: 'pending' | 'success' | 'failed';
+  status?: "pending" | "success" | "failed";
   message?: string;
   paymentUrl?: string;
   qrCode?: string;
@@ -48,7 +48,7 @@ export interface TONPaymentRequest {
 export interface TONPaymentResponse {
   success: boolean;
   transactionId?: string;
-  status?: 'pending' | 'success' | 'failed';
+  status?: "pending" | "success" | "failed";
   message?: string;
   paymentLink?: string;
 }
@@ -56,7 +56,7 @@ export interface TONPaymentResponse {
 export interface PaymentResponse {
   success: boolean;
   paymentId: string;
-  status: 'pending' | 'success' | 'failed';
+  status: "pending" | "success" | "failed";
   amount: number;
   currency: string;
   method: string;
@@ -70,7 +70,7 @@ export interface PaymentResponse {
 
 export interface PaymentStatus {
   paymentId: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  status: "pending" | "success" | "failed" | "cancelled";
   amount: number;
   currency: string;
   method: string;
@@ -87,11 +87,11 @@ export interface UserBalance {
 
 export interface Transaction {
   id: string;
-  type: 'deposit' | 'withdrawal' | 'bet' | 'winnings';
+  type: "deposit" | "withdrawal" | "bet" | "winnings";
   amount: number;
   currency: string;
   method: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: "pending" | "completed" | "failed";
   description: string;
   createdAt: string;
   completedAt?: string;

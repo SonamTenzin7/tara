@@ -145,6 +145,19 @@ export class ParimutuelEngine implements OnModuleInit {
         if (balanceBefore < amount)
           throw new BadRequestException("Insufficient balance");
 
+        // Snapshot pre-bet LMSR probabilities BEFORE mutating any pool state.
+        // This is the probability at the moment the user formed their belief —
+        // required for correct Brier score calibration (Formula 1.5).
+        const preBetProbs = this.lmsrService.calculateProbabilities(
+          market.outcomes,
+          Number(market.liquidityParam) || 1000,
+        );
+        const outcomeIndex = market.outcomes.findIndex(
+          (o) => o.id === outcomeId,
+        );
+        const predictedProbability =
+          outcomeIndex >= 0 ? preBetProbs[outcomeIndex] : null;
+
         // Update outcome pool
         outcome.totalBetAmount = Number(outcome.totalBetAmount) + amount;
 
@@ -161,23 +174,15 @@ export class ParimutuelEngine implements OnModuleInit {
           await em.save(Outcome, o);
         }
 
-        // Calculate LMSR probabilities (for display)
-        const lmsrProbs = this.lmsrService.calculateProbabilities(
+        // Calculate post-bet LMSR probabilities and update display
+        const postBetProbs = this.lmsrService.calculateProbabilities(
           market.outcomes,
           Number(market.liquidityParam) || 1000,
         );
 
-        // Snapshot probability of the chosen outcome BEFORE this bet lands
-        // (pre-bet LMSR probability is the fair price the user traded at)
-        const outcomeIndex = market.outcomes.findIndex(
-          (o) => o.id === outcomeId,
-        );
-        const predictedProbability =
-          outcomeIndex >= 0 ? lmsrProbs[outcomeIndex] : null;
-
         // Update LMSR probabilities for all outcomes
         for (let i = 0; i < market.outcomes.length; i++) {
-          market.outcomes[i].lmsrProbability = lmsrProbs[i];
+          market.outcomes[i].lmsrProbability = postBetProbs[i];
           await em.save(Outcome, market.outcomes[i]);
         }
 
