@@ -211,7 +211,7 @@ export const TmaProfilePage: FC = () => {
 
   const handlePaymentConfirm = async () => {
     if (payOtp.length < 4) {
-      setPayError("Please enter the OTP sent to your Telegram.");
+      setPayError("Please enter the OTP sent to your Telegram bot.");
       return;
     }
     setPayError("");
@@ -867,7 +867,7 @@ export const TmaProfilePage: FC = () => {
                     <Step
                       n={3}
                       done={false}
-                      text="Tap Share Phone Number button"
+                      text="Tap Share Phone Number in the bot"
                     />
                     <Step
                       n={4}
@@ -1188,7 +1188,7 @@ export const TmaProfilePage: FC = () => {
                   )}
                 </button>
                 <p style={modalStyles.hint}>
-                  An OTP will be sent to your Telegram chat to confirm this
+                  An OTP will be sent to your Telegram bot to confirm this
                   transaction.
                 </p>
               </div>

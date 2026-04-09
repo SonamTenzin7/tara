@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Market } from "../entities/market.entity";
 import { Outcome } from "../entities/outcome.entity";
@@ -15,9 +16,11 @@ import { LMSRService } from "./lmsr.service";
 import { KeeperService } from "./keeper.service";
 import { ReputationService } from "./reputation.service";
 import { TelegramModule } from "../telegram/telegram.module";
+import { PaymentModule } from "../payment/payment.module";
 
 @Module({
   imports: [
+    ConfigModule,
     TypeOrmModule.forFeature([
       Market,
       Outcome,
@@ -29,8 +32,15 @@ import { TelegramModule } from "../telegram/telegram.module";
       Dispute,
     ]),
     TelegramModule,
+    PaymentModule,
   ],
-  providers: [MarketsService, ParimutuelEngine, LMSRService, KeeperService, ReputationService],
+  providers: [
+    MarketsService,
+    ParimutuelEngine,
+    LMSRService,
+    KeeperService,
+    ReputationService,
+  ],
   controllers: [MarketsController],
   exports: [MarketsService, ParimutuelEngine],
 })

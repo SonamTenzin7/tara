@@ -11,6 +11,7 @@ import {
   Delete,
   Request,
   NotFoundException,
+  BadRequestException,
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
@@ -18,14 +19,17 @@ import {
   ApiOperation,
   ApiResponse,
   ApiQuery,
+  ApiProperty,
 } from "@nestjs/swagger";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { Repository, DataSource } from "typeorm";
 import { JwtAuthGuard, AdminGuard } from "../auth/guards";
 import { MarketsService, CreateMarketDto } from "../markets/markets.service";
 import { FixturesService } from "./fixtures.service";
 import { AuditService } from "./audit.service";
 import { TelegramSimpleService } from "../telegram/telegram.service.simple";
+import { RedisService } from "../redis/redis.service";
 import { AuditAction } from "../entities/audit-log.entity";
 import { Market, MarketStatus } from "../entities/market.entity";
 import { Outcome } from "../entities/outcome.entity";
@@ -34,11 +38,24 @@ import { Dispute } from "../entities/dispute.entity";
 import { Position } from "../entities/position.entity";
 import { User } from "../entities/user.entity";
 import { Payment } from "../entities/payment.entity";
+import { Transaction, TransactionType } from "../entities/transaction.entity";
 import { TransitionDto } from "./dto/transition.dto";
 import { ResolveDto } from "./dto/resolve.dto";
 import { ProposeResolutionDto } from "./dto/propose-resolution.dto";
 import { GetUsersQueryDto } from "./dto/get-users-query.dto";
 import { ToggleAdminDto } from "./dto/toggle-admin.dto";
+
+class CreditUserDto {
+  @ApiProperty({ example: 500, description: "Amount to credit (BTN)" })
+  @IsNumber()
+  @Min(1)
+  amount: number;
+
+  @ApiProperty({ required: false, example: "Staging DK top-up" })
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
 
 @ApiTags("admin")
 @ApiBearerAuth()
@@ -50,12 +67,16 @@ export class AdminController {
     private fixturesService: FixturesService,
     private auditService: AuditService,
     private telegramSimple: TelegramSimpleService,
+    private dataSource: DataSource,
+    private redis: RedisService,
     @InjectRepository(Settlement)
     private settlementRepo: Repository<Settlement>,
     @InjectRepository(Dispute) private disputeRepo: Repository<Dispute>,
     @InjectRepository(Position) private betRepo: Repository<Position>,
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
+    @InjectRepository(Transaction)
+    private transactionRepo: Repository<Transaction>,
   ) {}
 
   // ── Markets ────────────────────────────────────────────────────────────────
@@ -466,6 +487,68 @@ export class AdminController {
     });
 
     return { userId, isAdmin: dto.isAdmin };
+  }
+
+  @Post("users/:userId/credit")
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      "Manually credit a user's wallet with a DEPOSIT transaction (staging use)",
+  })
+  async creditUser(
+    @Param("userId") userId: string,
+    @Body() dto: CreditUserDto,
+    @Request() req: any,
+  ) {
+    const user = await this.userRepo.findOneBy({ id: userId });
+    if (!user) throw new NotFoundException("User not found");
+
+    if (dto.amount <= 0) throw new BadRequestException("Amount must be > 0");
+
+    const note = dto.note ?? "Admin manual credit";
+
+    const tx = await this.dataSource.transaction(async (em) => {
+      const { balance } = await em
+        .getRepository(Transaction)
+        .createQueryBuilder("t")
+        .select("COALESCE(SUM(t.amount), 0)", "balance")
+        .where("t.userId = :userId", { userId })
+        .getRawOne();
+      const balanceBefore = Number(balance);
+      const balanceAfter = balanceBefore + dto.amount;
+
+      return em.save(
+        Transaction,
+        em.create(Transaction, {
+          type: TransactionType.DEPOSIT,
+          amount: dto.amount,
+          balanceBefore,
+          balanceAfter,
+          userId,
+          note,
+        }),
+      );
+    });
+
+    // Bust the cached balance so the next /me call reflects immediately
+    await this.redis.del(`tara:cache:balance:${userId}`);
+
+    await this.auditService.log({
+      adminId: req.user.userId,
+      action: AuditAction.USER_ADMIN_TOGGLE, // closest existing action; rename later if needed
+      entityType: "user",
+      entityId: userId,
+      after: { creditAmount: dto.amount, note, transactionId: tx.id },
+      ipAddress: req.ip,
+    });
+
+    return {
+      transactionId: tx.id,
+      userId,
+      credited: dto.amount,
+      newBalance: tx.balanceAfter,
+      note,
+    };
   }
 
   // ── Payments ───────────────────────────────────────────────────────────────

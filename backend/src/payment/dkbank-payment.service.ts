@@ -332,9 +332,73 @@ export class DKBankPaymentService {
     // Clear Telegram OTP from Redis immediately after validation
     await this.redis.del(`tara:tg-otp:${paymentId}`);
 
-    // Telegram OTP verified — credit Tara balance directly.
-    // We never call DK account_auth/debit_request so no DK SMS is ever triggered.
-    // Security is enforced by: JWT auth + CID ownership + Telegram phone hash + this OTP.
+    // ── Step 2: Call DK Bank to actually debit the user's account ────────────
+    // account_auth  → DK generates a bfsTxnId (no SMS sent, we already have Telegram OTP)
+    // debit_request → DK pulls money from user DK account → merchant vault
+    // STAGING BYPASS: skip real DK debit and credit balance directly.
+    // DK staging sends the pull-payment OTP to placeholder "17000000" which
+    // nobody can receive, so real staging deposits are impossible via OTP.
+    const isStagingDepositBypass =
+      this.configService.get<string>("DK_STAGING_DEPOSIT_BYPASS") === "true";
+
+    const meta = payment.metadata || {};
+
+    if (isStagingDepositBypass) {
+      this.logger.warn(
+        `[STAGING] Skipping real DK debit for payment ${payment.id} — DK_STAGING_DEPOSIT_BYPASS active`,
+      );
+    } else {
+      // ── Step 2a: account_auth — authorize the transaction (get bfsTxnId) ──
+      const stanNumber = this.dkGateway.generateStanNumber();
+      let bfsTxnId: string;
+      let txDatetime: string;
+
+      try {
+        const authResult = await this.dkGateway.authorizeTransaction({
+          customerAccountNumber: meta.customerAccountNumber,
+          customerAccountName: meta.customerAccountName,
+          customerPhone: payment.customerPhone ?? "",
+          amount: Number(payment.amount),
+          description: payment.description ?? "DK Bank deposit",
+          stanNumber,
+        });
+        bfsTxnId = authResult.bfsTxnId;
+        txDatetime = authResult.txDatetime;
+        payment.dkInquiryId = bfsTxnId;
+        await this.paymentRepo.save(payment);
+      } catch (e: any) {
+        payment.status = PaymentStatus.FAILED;
+        payment.failureReason = e?.message || "DK account authorization failed";
+        await this.paymentRepo.save(payment);
+        throw new BadRequestException(payment.failureReason);
+      }
+
+      // ── Step 2b: debit_request — execute the pull payment with the OTP ───
+      // In production, account_auth triggers a DK SMS OTP to the customer's
+      // phone; the user enters that OTP in the TMA (same field). In staging
+      // this path is never reached because isStagingDepositBypass is true.
+      try {
+        const execResult = await this.dkGateway.executeTransactionWithOtp({
+          bfsTxnId,
+          otp,
+          stanNumber,
+          txDatetime,
+          sourceAccountNumber: meta.customerAccountNumber,
+          sourceAccountName: meta.customerAccountName,
+          amount: Number(payment.amount),
+          description: payment.description ?? "DK Bank deposit",
+        });
+        payment.dkTxnStatusId = execResult.txnStatusId;
+        await this.paymentRepo.save(payment);
+      } catch (e: any) {
+        payment.status = PaymentStatus.FAILED;
+        payment.failureReason = e?.message || "DK debit request failed";
+        await this.paymentRepo.save(payment);
+        throw new BadRequestException(payment.failureReason);
+      }
+    }
+
+    // ── Step 3: Credit Tara balance ───────────────────────────────────────────
     this.logger.log(
       `[Payment] Crediting Tara balance for payment ${payment.id}`,
     );
@@ -817,14 +881,43 @@ export class DKBankPaymentService {
       }
 
       // ── Call DK Gateway: push funds from merchant vault to user account ───
-      const transferResult = await this.dkGateway.transferToAccount({
-        accountNumber:
-          user?.dkAccountNumber ?? lockedPayment.metadata?.dkAccountNumber,
-        amount: withdrawalAmount,
-        currency: "BTN",
-        reference: lockedPayment.id,
-        description: `Tara withdrawal for user ${userId}`,
-      });
+      // Uses /v1/initiate/transaction which works in both staging and production.
+      // No bypass needed — this endpoint is confirmed working in DK staging.
+      const isStagingWithdrawalBypass =
+        this.configService.get<string>("DK_STAGING_WITHDRAWAL_BYPASS") ===
+        "true";
+
+      let transferResult: {
+        txnId: string | null;
+        txnStatusId?: string | null;
+        inquiryId?: string | null;
+        status: string;
+        statusDesc: string;
+        raw?: unknown;
+      };
+      if (isStagingWithdrawalBypass) {
+        this.logger.warn(
+          `[STAGING] Skipping real DK transfer for payment ${lockedPayment.id} — DK_STAGING_WITHDRAWAL_BYPASS active`,
+        );
+        transferResult = {
+          txnId: `STAGING-${Date.now()}`,
+          status: "SUCCESS",
+          statusDesc: "Staging bypass — no real transfer",
+        };
+      } else {
+        transferResult = await this.dkGateway.transferToAccount({
+          accountNumber:
+            user?.dkAccountNumber ?? lockedPayment.metadata?.dkAccountNumber,
+          accountName:
+            user?.dkAccountName ??
+            lockedPayment.metadata?.dkAccountName ??
+            undefined,
+          amount: withdrawalAmount,
+          currency: "BTN",
+          reference: lockedPayment.id,
+          description: `Tara withdrawal for user ${userId}`,
+        });
+      }
 
       const transferSucceeded =
         typeof transferResult?.status === "string" &&

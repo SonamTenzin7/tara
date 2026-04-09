@@ -5,6 +5,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { ConfigService } from "@nestjs/config";
 import { Repository, DataSource, In } from "typeorm";
 import { RedisService } from "../redis/redis.service";
 import { Market, MarketStatus } from "../entities/market.entity";
@@ -18,6 +19,7 @@ import { User } from "../entities/user.entity";
 import { LMSRService } from "./lmsr.service";
 import { ReputationService } from "./reputation.service";
 import { TelegramSimpleService } from "../telegram/telegram.service.simple";
+import { DKGatewayService } from "../payment/services/dk-gateway/dk-gateway.service";
 
 // ─── Valid state machine transitions ────────────────────────────────────────
 const VALID_TRANSITIONS: Record<MarketStatus, MarketStatus[]> = {
@@ -55,6 +57,8 @@ export class ParimutuelEngine implements OnModuleInit {
     private redis: RedisService,
     private reputationService: ReputationService,
     private telegramSimple: TelegramSimpleService,
+    private dkGateway: DKGatewayService,
+    private configService: ConfigService,
   ) {}
 
   private async getCreditsBalance(
@@ -305,6 +309,18 @@ export class ParimutuelEngine implements OnModuleInit {
     // Settle
     const settlement = await this.settleMarket(market, winner);
 
+    // Push real BTN from merchant → winners' DK accounts — fire and forget
+    this.dispatchDkPayouts(
+      market.id,
+      winner.id,
+      winner.label,
+      settlement,
+    ).catch((err: Error) =>
+      this.logger.warn(
+        `[DK Payout] Dispatch failed for market ${marketId}: ${err.message}`,
+      ),
+    );
+
     // Recalculate reputation + send individual result DMs — fire and forget
     this.sendSettlementNotifications(market, winner, settlement).catch((err) =>
       this.logger.warn(
@@ -337,6 +353,81 @@ export class ParimutuelEngine implements OnModuleInit {
         dispute.bondRefunded = true;
         await em.save(Dispute, dispute);
       });
+    }
+  }
+
+  /**
+   * After settlement, push real BTN from the Tara merchant DK account to
+   * each winner's DK Bank account (if they have one linked).
+   *
+   * This runs fire-and-forget after the ledger has already been updated,
+   * so a DK API failure does NOT roll back the in-app credit.  Errors are
+   * logged so they can be investigated and retried manually if needed.
+   *
+   * Bypass: set DK_STAGING_PAYOUT_BYPASS=true in .env to skip real DK calls
+   * (required in staging because /v1/fund_transfer returns 404 there).
+   */
+  private async dispatchDkPayouts(
+    marketId: string,
+    winningOutcomeId: string,
+    outcomeLabel: string,
+    settlement: Settlement,
+  ): Promise<void> {
+    const bypass =
+      this.configService.get<string>("DK_STAGING_PAYOUT_BYPASS") === "true";
+
+    if (bypass) {
+      this.logger.log(
+        `[DK Payout] STAGING BYPASS — skipping real DK transfers for market ${marketId} (${settlement.winningPositions} winner(s), pool BTN ${settlement.payoutPool})`,
+      );
+      return;
+    }
+
+    // Fetch all winning positions with their users
+    const winningBets = await this.betRepo.find({
+      where: {
+        marketId,
+        outcomeId: winningOutcomeId,
+        status: PositionStatus.WON,
+      },
+      relations: ["user"],
+    });
+
+    for (const bet of winningBets) {
+      const user: User = (bet as any).user;
+      if (!user?.dkAccountNumber) {
+        this.logger.warn(
+          `[DK Payout] User ${bet.userId} has no DK account linked — skipping DK transfer for position ${bet.id} (BTN ${bet.payout})`,
+        );
+        continue;
+      }
+
+      const payout = Number(bet.payout ?? 0);
+      if (payout <= 0) continue;
+
+      try {
+        const result = await this.dkGateway.transferToAccount({
+          accountNumber: user.dkAccountNumber,
+          accountName: user.dkAccountName ?? undefined,
+          amount: payout,
+          reference: bet.id,
+          description: `Tara payout: ${outcomeLabel}`,
+        });
+
+        if (result.status === "SUCCESS") {
+          this.logger.log(
+            `[DK Payout] ✅ BTN ${payout} → ${user.dkAccountNumber} (user ${bet.userId}) txnId=${result.txnId}`,
+          );
+        } else {
+          this.logger.error(
+            `[DK Payout] ❌ Transfer FAILED for user ${bet.userId} (BTN ${payout}): ${result.statusDesc}`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `[DK Payout] ❌ Exception for user ${bet.userId} position ${bet.id}: ${err?.message}`,
+        );
+      }
     }
   }
 

@@ -102,6 +102,18 @@ function makeDkGateway(
     checkTransactionStatus: jest.fn(),
     verifyWebhookSignature: jest.fn().mockReturnValue(true),
     clientInquiry: jest.fn(),
+    generateStanNumber: jest.fn().mockReturnValue("123456"),
+    /** Simulates DK account_auth — returns bfsTxnId for debit_request */
+    authorizeTransaction: jest.fn().mockResolvedValue({
+      bfsTxnId: "BFS-TXN-001",
+      stanNumber: "123456",
+      txDatetime: new Date().toISOString(),
+    }),
+    /** Simulates DK debit_request — pulls money from user account → merchant vault */
+    executeTransactionWithOtp: jest.fn().mockResolvedValue({
+      txnStatusId: "TXN-STATUS-001",
+      raw: {},
+    }),
     /** Simulates merchant-to-user credit transfer (vault → user DK account) */
     transferToAccount: jest.fn().mockResolvedValue({
       txnId: "DK-TXN-W001",
@@ -141,8 +153,29 @@ function makeTelegramVerification() {
   return { verifyPaymentIdentity: jest.fn().mockResolvedValue(undefined) };
 }
 
-function makeConfigService() {
-  return { get: jest.fn().mockReturnValue("http://dk.example.com") };
+function makeConfigService(overrides: Record<string, string> = {}) {
+  const defaults: Record<string, string> = {
+    DK_BASE_URL: "http://dk.example.com",
+    // Default: staging bypasses ON so existing tests don't hit real DK calls
+    DK_STAGING_DEPOSIT_BYPASS: "true",
+    DK_STAGING_WITHDRAWAL_BYPASS: "true",
+    NODE_ENV: "test",
+    ...overrides,
+  };
+  return {
+    get: jest
+      .fn()
+      .mockImplementation((key: string) => defaults[key] ?? undefined),
+  };
+}
+
+/** ConfigService that disables all bypasses — simulates production environment */
+function makeProductionConfigService() {
+  return makeConfigService({
+    DK_STAGING_DEPOSIT_BYPASS: "false",
+    DK_STAGING_WITHDRAWAL_BYPASS: "false",
+    NODE_ENV: "production",
+  });
 }
 
 function makeService(
@@ -154,6 +187,7 @@ function makeService(
     dkGateway?: any;
     dataSource?: any;
     telegramVerification?: any;
+    configService?: any;
   } = {},
 ) {
   const userRepo = makeUserRepo(
@@ -170,11 +204,12 @@ function makeService(
   const dataSource = overrides.dataSource ?? makeDataSource();
   const telegramVerification =
     overrides.telegramVerification ?? makeTelegramVerification();
+  const configService = overrides.configService ?? makeConfigService();
 
   const service = new DKBankPaymentService(
     dataSource as any,
     dkGateway as any,
-    makeConfigService() as any,
+    configService as any,
     redis as any,
     makeTelegramService() as any,
     telegramVerification as any,
@@ -191,6 +226,7 @@ function makeService(
     redis,
     dkGateway,
     dataSource,
+    configService,
   };
 }
 
@@ -234,7 +270,7 @@ describe("DKBankPaymentService.initiatePayment", () => {
     await expect(
       service.initiatePayment("user-1", {
         amount: 100,
-        cid: "99900000000", 
+        cid: "99900000000",
         description: "top-up",
       }),
     ).rejects.toThrow(BadRequestException);
@@ -336,7 +372,196 @@ describe("DKBankPaymentService.confirmPayment", () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it("credits balance and marks payment SUCCESS on correct OTP", async () => {
+  // ── STAGING bypass path ───────────────────────────────────────────────────
+
+  it("[STAGING BYPASS] credits balance without calling DK account_auth or debit_request", async () => {
+    const payment = makePayment({
+      status: PaymentStatus.PENDING,
+      metadata: {
+        customerAccountNumber: "ACC001",
+        customerAccountName: "Test",
+      },
+    });
+    const paymentRepo = makePaymentRepo(payment);
+    const redis = makeRedis({ otp: "123456", userId: "user-1" });
+    const dkGateway = makeDkGateway();
+    const dataSource = makeDataSource();
+    const em = dataSource._em;
+    em.getRepository.mockReturnValue({
+      createQueryBuilder: jest.fn().mockReturnValue({
+        setLock: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(payment),
+        getRawOne: jest.fn().mockResolvedValue({ balance: 0 }),
+      }),
+    });
+
+    // Default makeConfigService has DK_STAGING_DEPOSIT_BYPASS=true
+    const { service } = makeService({ payment, redis, dkGateway, dataSource });
+    (service as any).paymentRepo = paymentRepo;
+
+    const result = await service.confirmPayment(
+      "user-1",
+      "payment-1",
+      "123456",
+    );
+
+    expect(result.status).toBe("success");
+    // DK calls must NOT have been made in staging bypass mode
+    expect(dkGateway.authorizeTransaction).not.toHaveBeenCalled();
+    expect(dkGateway.executeTransactionWithOtp).not.toHaveBeenCalled();
+    // Balance was still credited
+    expect(em.save).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ type: TransactionType.DEPOSIT }),
+    );
+  });
+
+  // ── PRODUCTION path: real DK debit ───────────────────────────────────────
+
+  it("[PRODUCTION] calls account_auth then debit_request before crediting balance", async () => {
+    const payment = makePayment({
+      status: PaymentStatus.PENDING,
+      metadata: {
+        customerAccountNumber: "ACC001",
+        customerAccountName: "Test User",
+      },
+      customerPhone: "17123456",
+    });
+    const paymentRepo = makePaymentRepo(payment);
+    const redis = makeRedis({ otp: "123456", userId: "user-1" });
+    const dkGateway = makeDkGateway();
+    const dataSource = makeDataSource();
+    const em = dataSource._em;
+    em.getRepository.mockReturnValue({
+      createQueryBuilder: jest.fn().mockReturnValue({
+        setLock: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(payment),
+        getRawOne: jest.fn().mockResolvedValue({ balance: 0 }),
+      }),
+    });
+
+    const { service } = makeService({
+      payment,
+      redis,
+      dkGateway,
+      dataSource,
+      configService: makeProductionConfigService(), // bypasses OFF
+    });
+    (service as any).paymentRepo = paymentRepo;
+
+    const result = await service.confirmPayment(
+      "user-1",
+      "payment-1",
+      "123456",
+    );
+
+    expect(result.status).toBe("success");
+
+    // Step 1: account_auth was called with the customer account details
+    expect(dkGateway.authorizeTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customerAccountNumber: "ACC001",
+        customerAccountName: "Test User",
+        amount: 100,
+      }),
+    );
+
+    // Step 2: debit_request was called with the bfsTxnId from account_auth
+    expect(dkGateway.executeTransactionWithOtp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bfsTxnId: "BFS-TXN-001",
+        otp: "123456",
+        amount: 100,
+      }),
+    );
+
+    // Step 3: Tara balance was credited
+    expect(em.save).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ type: TransactionType.DEPOSIT }),
+    );
+  });
+
+  it("[PRODUCTION] marks payment FAILED and throws when account_auth fails", async () => {
+    const payment = makePayment({
+      status: PaymentStatus.PENDING,
+      metadata: {
+        customerAccountNumber: "ACC001",
+        customerAccountName: "Test",
+      },
+    });
+    const paymentRepo = makePaymentRepo(payment);
+    const redis = makeRedis({ otp: "123456", userId: "user-1" });
+    const dkGateway = makeDkGateway();
+    dkGateway.authorizeTransaction = jest
+      .fn()
+      .mockRejectedValue(new BadRequestException("Account not found"));
+
+    const { service } = makeService({
+      payment,
+      redis,
+      dkGateway,
+      configService: makeProductionConfigService(),
+    });
+    (service as any).paymentRepo = paymentRepo;
+
+    await expect(
+      service.confirmPayment("user-1", "payment-1", "123456"),
+    ).rejects.toThrow(BadRequestException);
+
+    // Payment marked FAILED
+    expect(paymentRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: PaymentStatus.FAILED }),
+    );
+    // debit_request must NOT have been called
+    expect(dkGateway.executeTransactionWithOtp).not.toHaveBeenCalled();
+  });
+
+  it("[PRODUCTION] marks payment FAILED and throws when debit_request fails", async () => {
+    const payment = makePayment({
+      status: PaymentStatus.PENDING,
+      metadata: {
+        customerAccountNumber: "ACC001",
+        customerAccountName: "Test",
+      },
+    });
+    const paymentRepo = makePaymentRepo(payment);
+    const redis = makeRedis({ otp: "123456", userId: "user-1" });
+    const dkGateway = makeDkGateway();
+    dkGateway.executeTransactionWithOtp = jest
+      .fn()
+      .mockRejectedValue(new BadRequestException("Invalid OTP"));
+
+    const { service } = makeService({
+      payment,
+      redis,
+      dkGateway,
+      configService: makeProductionConfigService(),
+    });
+    (service as any).paymentRepo = paymentRepo;
+
+    await expect(
+      service.confirmPayment("user-1", "payment-1", "123456"),
+    ).rejects.toThrow(BadRequestException);
+
+    // Payment marked FAILED
+    expect(paymentRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: PaymentStatus.FAILED }),
+    );
+    // Balance must NOT have been credited
+    const creditCall = (makeDataSource()._em.save as jest.Mock).mock?.calls
+      ?.map((c: any[]) => c[1])
+      ?.find((d: any) => d?.type === TransactionType.DEPOSIT);
+    expect(creditCall).toBeUndefined();
+  });
+
+  it("credits balance and marks payment SUCCESS on correct OTP (staging bypass)", async () => {
     const payment = makePayment({ status: PaymentStatus.PENDING });
     const paymentRepo = makePaymentRepo(payment);
     const redis = makeRedis({ otp: "123456", userId: "user-1" });
@@ -642,6 +867,7 @@ describe("Merchant vault → user DK account (withdrawal flow)", () => {
         redis,
         dkGateway,
         dataSource,
+        configService: makeProductionConfigService(), // bypasses OFF → real DK transfer
       });
       (service as any).paymentRepo = paymentRepo;
 
@@ -717,6 +943,7 @@ describe("Merchant vault → user DK account (withdrawal flow)", () => {
         redis,
         dkGateway,
         dataSource,
+        configService: makeProductionConfigService(), // bypasses OFF → real DK transfer throws
       });
       (service as any).paymentRepo = paymentRepo;
 
@@ -798,6 +1025,7 @@ describe("Merchant vault → user DK account (withdrawal flow)", () => {
         redis,
         dkGateway,
         dataSource,
+        configService: makeProductionConfigService(), // bypasses OFF → real DK transfer
       });
       (service as any).paymentRepo = paymentRepo;
 
