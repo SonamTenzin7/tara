@@ -250,7 +250,7 @@ export function submitDispute(
 export interface ActivityEvent {
   type: "bet" | "win";
   userName: string;
-  outomeLabel: string;  // note: matches backend spelling
+  outomeLabel: string; // note: matches backend spelling
   marketTitle: string;
   amount: number;
   placedAt: string;
@@ -309,7 +309,10 @@ export interface PlaceBetResult {
   [key: string]: any;
 }
 
-export function placeBet(marketId: string, payload: PlaceBetPayload): Promise<PlaceBetResult> {
+export function placeBet(
+  marketId: string,
+  payload: PlaceBetPayload,
+): Promise<PlaceBetResult> {
   return request<PlaceBetResult>(`/markets/${marketId}/bets`, {
     method: "POST",
     body: JSON.stringify(payload),

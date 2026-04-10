@@ -42,7 +42,9 @@ export const StreakBanner: FC<StreakBannerProps> = ({
           ? "1px solid rgba(245,158,11,0.5)"
           : "1px solid rgba(239,68,68,0.25)",
         marginTop: 8,
-        animation: boostJustActivated ? "tmaSuccessPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards" : undefined,
+        animation: boostJustActivated
+          ? "tmaSuccessPop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards"
+          : undefined,
       }}
     >
       {/* Top row */}
@@ -70,7 +72,11 @@ export const StreakBanner: FC<StreakBannerProps> = ({
         </div>
         {!boostJustActivated && (
           <span
-            style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}
+            style={{
+              fontSize: 11,
+              color: "rgba(255,255,255,0.4)",
+              fontWeight: 600,
+            }}
           >
             {nextBoostInDays === 0
               ? "Boost ready!"
@@ -110,11 +116,7 @@ export const StreakBanner: FC<StreakBannerProps> = ({
               transition: "all 0.3s ease",
               position: "relative",
             }}
-            title={
-              isBoostDay
-                ? `Day 7 — 1.2× payout boost`
-                : `Day ${dayNum}`
-            }
+            title={isBoostDay ? `Day 7 — 1.2× payout boost` : `Day ${dayNum}`}
           >
             {isBoostDay && (
               <Zap
@@ -138,7 +140,9 @@ export const StreakBanner: FC<StreakBannerProps> = ({
           }}
         >
           Bet every day for 7 days and get a{" "}
-          <span style={{ color: "#f59e0b", fontWeight: 700 }}>1.2× payout boost</span>{" "}
+          <span style={{ color: "#f59e0b", fontWeight: 700 }}>
+            1.2× payout boost
+          </span>{" "}
           on day 7.
         </p>
       )}

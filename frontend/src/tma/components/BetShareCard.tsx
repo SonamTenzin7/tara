@@ -38,14 +38,27 @@ async function renderCard(
   ctx.strokeStyle = "rgba(255,255,255,0.04)";
   ctx.lineWidth = 1;
   for (let x = 0; x < CARD_W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CARD_H); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, CARD_H);
+    ctx.stroke();
   }
   for (let y = 0; y < CARD_H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CARD_W, y); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(CARD_W, y);
+    ctx.stroke();
   }
 
   // Glow behind outcome chip
-  const glow = ctx.createRadialGradient(CARD_W / 2, CARD_H * 0.55, 10, CARD_W / 2, CARD_H * 0.55, 200);
+  const glow = ctx.createRadialGradient(
+    CARD_W / 2,
+    CARD_H * 0.55,
+    10,
+    CARD_W / 2,
+    CARD_H * 0.55,
+    200,
+  );
   const color = opts.outcomeColor || "#3b82f6";
   glow.addColorStop(0, `${color}33`);
   glow.addColorStop(1, "transparent");
@@ -133,7 +146,11 @@ async function renderCard(
       ctx.fillText(line, 32, titleY);
       line = word;
       titleY += titleFontSize + 6;
-      if (titleY > 220) { ctx.fillText(line + "…", 32, titleY); line = ""; break; }
+      if (titleY > 220) {
+        ctx.fillText(line + "…", 32, titleY);
+        line = "";
+        break;
+      }
     } else {
       line = test;
     }
@@ -186,7 +203,11 @@ async function renderCard(
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
 ) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);

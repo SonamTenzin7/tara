@@ -4,7 +4,7 @@ import { Repository, DataSource } from "typeorm";
 import { User } from "../entities/user.entity";
 import { Transaction, TransactionType } from "../entities/transaction.entity";
 
-export const STREAK_BONUS_DAY = 7;    // day on which the boost fires
+export const STREAK_BONUS_DAY = 7; // day on which the boost fires
 export const STREAK_BONUS_MULT = 1.2; // 20 % extra payout
 
 export interface StreakUpdateResult {
@@ -21,7 +21,8 @@ export class StreakService {
 
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
-    @InjectRepository(Transaction) private transactionRepo: Repository<Transaction>,
+    @InjectRepository(Transaction)
+    private transactionRepo: Repository<Transaction>,
     private dataSource: DataSource,
   ) {}
 
@@ -109,7 +110,12 @@ export class StreakService {
     });
 
     if (!user) {
-      return { betStreakCount: 0, dayInCycle: 0, nextBoostInDays: 7, boostReady: false };
+      return {
+        betStreakCount: 0,
+        dayInCycle: 0,
+        nextBoostInDays: 7,
+        boostReady: false,
+      };
     }
 
     const count = user.betStreakCount || 0;
@@ -119,9 +125,7 @@ export class StreakService {
     const betToday = user.betStreakLastAt === todayUtc;
 
     const boostReady =
-      dayInCycle === STREAK_BONUS_DAY &&
-      !user.streakBoostUsed &&
-      betToday;
+      dayInCycle === STREAK_BONUS_DAY && !user.streakBoostUsed && betToday;
 
     return { betStreakCount: count, dayInCycle, nextBoostInDays, boostReady };
   }
@@ -160,6 +164,8 @@ export class StreakService {
       );
     });
 
-    this.logger.log(`Streak bonus credited user=${userId} bonus=${bonusAmount}`);
+    this.logger.log(
+      `Streak bonus credited user=${userId} bonus=${bonusAmount}`,
+    );
   }
 }

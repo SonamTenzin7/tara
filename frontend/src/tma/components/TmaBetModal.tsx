@@ -128,7 +128,10 @@ export function TmaBetModal({
       }
 
       // Place the bet - this will deduct from credits balance on backend
-      const result = await placeBet(market.id, { outcomeId, amount: betAmount });
+      const result = await placeBet(market.id, {
+        outcomeId,
+        amount: betAmount,
+      });
       if (result?.streak) setStreak(result.streak);
 
       setStatus("success");
@@ -324,12 +327,17 @@ export function TmaBetModal({
             )}
 
             {/* ── Bet Share Card ── */}
-            <div style={{ animation: "tmaFadeIn 0.35s ease 0.55s both", marginTop: 12 }}>
+            <div
+              style={{
+                animation: "tmaFadeIn 0.35s ease 0.55s both",
+                marginTop: 12,
+              }}
+            >
               <BetShareCard
                 userName={
                   user?.username
                     ? `@${user.username}`
-                    : user?.firstName ?? "You"
+                    : (user?.firstName ?? "You")
                 }
                 userPhotoUrl={user?.photoUrl}
                 marketTitle={market.title}
@@ -342,10 +350,18 @@ export function TmaBetModal({
 
             {/* ── Challenge a Friend ── */}
             {(() => {
-              const otherOutcomes = market.outcomes.filter((o) => o.id !== outcomeId);
-              const opposing = otherOutcomes.length === 1 ? otherOutcomes[0].label : undefined;
+              const otherOutcomes = market.outcomes.filter(
+                (o) => o.id !== outcomeId,
+              );
+              const opposing =
+                otherOutcomes.length === 1 ? otherOutcomes[0].label : undefined;
               return (
-                <div style={{ animation: "tmaFadeIn 0.35s ease 0.65s both", marginTop: 10 }}>
+                <div
+                  style={{
+                    animation: "tmaFadeIn 0.35s ease 0.65s both",
+                    marginTop: 10,
+                  }}
+                >
                   <ChallengeAFriend
                     pickedOutcomeLabel={outcome?.label ?? ""}
                     opposingOutcomeLabel={opposing}
@@ -358,7 +374,12 @@ export function TmaBetModal({
             })()}
 
             {/* ── Legacy Share CTA ── */}
-            <div style={{ animation: "tmaFadeIn 0.35s ease 0.7s both", marginTop: 4 }}>
+            <div
+              style={{
+                animation: "tmaFadeIn 0.35s ease 0.7s both",
+                marginTop: 4,
+              }}
+            >
               <ShareCTA
                 type="bet"
                 amount={betAmount}

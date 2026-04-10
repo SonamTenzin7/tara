@@ -49,7 +49,8 @@ export const ChallengeAFriend: FC<ChallengeAFriendProps> = ({
         justifyContent: "center",
         gap: 8,
         padding: "12px 16px",
-        background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.08))",
+        background:
+          "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.08))",
         border: "1px solid rgba(245,158,11,0.35)",
         borderRadius: 12,
         color: "#f59e0b",
@@ -59,9 +60,15 @@ export const ChallengeAFriend: FC<ChallengeAFriendProps> = ({
         letterSpacing: "-0.01em",
         transition: "transform 0.1s ease, opacity 0.15s ease",
       }}
-      onMouseDown={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)")}
-      onMouseUp={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = "scale(1)")}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.transform = "scale(1)")}
+      onMouseDown={(e) =>
+        ((e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)")
+      }
+      onMouseUp={(e) =>
+        ((e.currentTarget as HTMLButtonElement).style.transform = "scale(1)")
+      }
+      onMouseLeave={(e) =>
+        ((e.currentTarget as HTMLButtonElement).style.transform = "scale(1)")
+      }
     >
       <Users size={15} />
       Challenge a Friend

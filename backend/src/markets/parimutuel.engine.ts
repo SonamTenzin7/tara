@@ -93,7 +93,11 @@ export class ParimutuelEngine implements OnModuleInit {
     marketId: string,
     outcomeId: string,
     amount: number,
-  ): Promise<Position & { streak?: { count: number; dayInCycle: number; boostActive: boolean } }> {
+  ): Promise<
+    Position & {
+      streak?: { count: number; dayInCycle: number; boostActive: boolean };
+    }
+  > {
     if (amount <= 0)
       throw new BadRequestException("Position amount must be positive");
 
@@ -257,11 +261,14 @@ export class ParimutuelEngine implements OnModuleInit {
       }
 
       // ── Update daily bet streak (non-blocking) ───────────────────────────
-      const streakResult = await this.streakService.updateStreak(userId).catch(() => null);
+      const streakResult = await this.streakService
+        .updateStreak(userId)
+        .catch(() => null);
 
       // If day-7 boost is active, credit the bonus payout immediately
       if (streakResult?.boostActive && completedPosition) {
-        const bonusAmount = Math.round(amount * (STREAK_BONUS_MULT - 1) * 100) / 100;
+        const bonusAmount =
+          Math.round(amount * (STREAK_BONUS_MULT - 1) * 100) / 100;
         this.streakService
           .creditStreakBonus(userId, completedPosition.id, bonusAmount)
           .catch((err: any) =>
@@ -437,7 +444,10 @@ export class ParimutuelEngine implements OnModuleInit {
           // Disputant was CORRECT — return bond (credits path only;
           // DK Bank path bonds were external payments, not credited)
           if (!dispute.bondPaymentId) {
-            const balanceBefore = await this.getCreditsBalance(em, dispute.userId);
+            const balanceBefore = await this.getCreditsBalance(
+              em,
+              dispute.userId,
+            );
             await em.save(
               Transaction,
               em.create(Transaction, {

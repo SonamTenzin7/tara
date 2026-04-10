@@ -883,7 +883,6 @@ export const TmaProfilePage: FC = () => {
 
         {/* ── Collectible Badges ────────────────────────────── */}
         <div style={{ padding: "0 16px" }}>
-
           {/* Daily Bet Streak */}
           {(user?.betStreakCount ?? 0) > 0 && (
             <div style={{ marginBottom: 16 }}>
