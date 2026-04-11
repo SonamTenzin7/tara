@@ -5,11 +5,11 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 // Store the JWT in sessionStorage — survives page navigation, cleared on tab close
-let _token: string | null = sessionStorage.getItem("tara_token");
+let _token: string | null = sessionStorage.getItem("oro_token");
 
 export function setToken(token: string) {
   _token = token;
-  sessionStorage.setItem("tara_token", token);
+  sessionStorage.setItem("oro_token", token);
 }
 
 export function getToken(): string | null {
@@ -18,7 +18,7 @@ export function getToken(): string | null {
 
 export function clearToken() {
   _token = null;
-  sessionStorage.removeItem("tara_token");
+  sessionStorage.removeItem("oro_token");
 }
 
 // Decode a JWT payload without a library — returns null if malformed
@@ -60,7 +60,7 @@ export async function request<T>(
   if (res.status === 401) {
     // Token rejected by server — clear it and notify the app
     clearToken();
-    window.dispatchEvent(new Event("tara:unauthorized"));
+    window.dispatchEvent(new Event("oro:unauthorized"));
     const err = await res.json().catch(() => ({ message: "Unauthorized" }));
     throw new Error(err.message || "Unauthorized");
   }

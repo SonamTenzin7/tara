@@ -92,7 +92,7 @@ export function PwaPaymentModal({
         cid: cidNumber,
         customerName: customerName || undefined,
         description: `Predict: ${market.title} — ${outcome?.label}`,
-        merchantTxnId: `TARA_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+        merchantTxnId: `ORO_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       };
       const payment = await initiateDKBankPayment(req);
       if (payment.status === "success") {

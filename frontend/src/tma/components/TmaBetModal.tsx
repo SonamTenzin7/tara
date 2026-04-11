@@ -5,7 +5,7 @@ import { getMe, placeBet } from "@/api/client";
 import type { Market, BetStreak } from "@/api/client";
 import { PayoutBreakdown } from "@/components/PayoutBreakdown";
 import { ShareCTA } from "@/tma/components/ShareCTA";
-import { BetShareCard } from "@/tma/components/BetShareCard";
+import { BetShareCard } from "@/components/BetShareCard";
 import { ChallengeAFriend } from "@/tma/components/ChallengeAFriend";
 import { StreakBanner } from "@/tma/components/StreakBanner";
 import { useAuth } from "@/tma/hooks/useAuth";
@@ -136,7 +136,7 @@ export function TmaBetModal({
 
       setStatus("success");
       onSuccess?.();
-      window.dispatchEvent(new CustomEvent("tara:balance-changed"));
+      window.dispatchEvent(new CustomEvent("oro:balance-changed"));
 
       // Trigger Celebration
       if (hapticFeedback.impactOccurred.isAvailable()) {
@@ -792,7 +792,7 @@ export function TmaBetModal({
                         letterSpacing: "0.06em",
                       }}
                     >
-                      Est. payout if win
+                      You'll win
                     </div>
                     <div
                       style={{

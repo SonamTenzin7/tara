@@ -1,5 +1,5 @@
 // ============================================================
-//   TARA APP CONFIGURATION
+//   ORO APP CONFIGURATION
 //   Bhutanese Archery Parimutuel Betting Platform
 // ============================================================
 
@@ -7,26 +7,26 @@ const config = {
   // ----------------------------------------------------------
   // APP INFO
   // ----------------------------------------------------------
-  appName: "Tara",
+  appName: "Oro",
   appDescription: "Bhutanese Archery Prediction Markets - Trade event contracts with BTN or TON",
   version: "1.0.0-phase1",
 
   // ----------------------------------------------------------
   // TELEGRAM BOT
   // ----------------------------------------------------------
-  botUsername: "Tara_parimutuel_bot",
+  botUsername: "OroPredictBot",
 
   // ----------------------------------------------------------
   // DEPLOYMENT URL
   // The public URL where your app will be hosted
   // ----------------------------------------------------------
-  appUrl: "https://tara-parimutuel.vercel.app",
+  appUrl: "https://oro-predict.vercel.app",
 
   // ----------------------------------------------------------
   // TON CONNECT (for crypto wallet connection)
   // ----------------------------------------------------------
   tonConnectIconUrl:
-    "https://tara-parimutuel.vercel.app/icons/icon-192x192.png",
+    "https://oro-predict.vercel.app/icons/icon-192x192.png",
 
   // ----------------------------------------------------------
   // PAYMENT METHODS (Phase 1: Bhutan Launch)

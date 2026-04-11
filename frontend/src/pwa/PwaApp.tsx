@@ -15,7 +15,8 @@ import { PwaBottomNav } from "./components/PwaBottomNav";
 import { TonConnectUIProvider } from "@tonconnect/ui-react";
 import { publicUrl } from "@/helpers/publicUrl.ts";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { OroLogo } from "@/components/OroLogo";
+
 
 function PwaLayout() {
   // const { isAuthenticated, setIsAuthenticated } = useAuth();
@@ -50,23 +51,9 @@ function PwaLayout() {
         }}
       >
         <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 20px", height: 64, display: "flex", alignItems: "center" }}>
-        {/* Logo + wordmark */}
+        {/* Logo + branding */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* T icon mark */}
-          <svg width="40" height="40" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-            <defs>
-              <linearGradient id="tara-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#3ecf6e" />
-                <stop offset="100%" stopColor="#2b7fdb" />
-              </linearGradient>
-            </defs>
-            <circle cx="10" cy="36" r="6" fill="#3ecf6e"/>
-            <circle cx="20" cy="52" r="5" fill="#2b7fdb"/>
-            <path d="M28,18 C28,10 34,6 42,6 L56,6 L56,22 L42,22 C36,22 28,26 28,18 Z" fill="#3ecf6e"/>
-            <rect x="56" y="6" width="18" height="16" rx="8" fill="#2775d0"/>
-            <rect x="56" y="22" width="8" height="50" rx="3" fill="#1c5bb8"/>
-            <rect x="67" y="22" width="8" height="50" rx="3" fill="#2775d0"/>
-          </svg>
+          <OroLogo size={42} />
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
             <span style={{ fontWeight: 800, fontSize: "1.2rem", color: "var(--text-main)", letterSpacing: "-0.03em", fontFamily: "var(--font-display)" }}>
               Oro
@@ -80,7 +67,7 @@ function PwaLayout() {
         {/* Top nav links - currently empty but reserved for future profile/global actions */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
           <a
-            href="https://t.me/Tara_parimutuel_bot"
+            href="https://t.me/OroPredictBot"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -101,7 +88,6 @@ function PwaLayout() {
             </svg>
             Telegram
           </a>
-          <ThemeToggle />
           
           {/* Desktop-only nav links — disabled: betting is through Telegram only */}
           {/* {!isMobile && [

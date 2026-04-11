@@ -22,7 +22,7 @@ export const ThemeContext = createContext<ThemeProviderState>(initialState);
 
 export function ThemeProvider({
   children,
-  storageKey: _storageKey = "tara-theme",
+  storageKey: _storageKey = "oro-theme",
   ...props
 }: ThemeProviderProps) {
   // App is dark-mode only — always apply "dark" class

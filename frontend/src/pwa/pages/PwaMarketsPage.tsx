@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
-import { getMarkets, placeBet, type Market } from "@/api/client";
+import { 
+  getMarkets, 
+  placeBet, 
+  type Market 
+} from "@/api/client";
 import { PwaPaymentModal } from "../components/PwaPaymentModal";
 import type { PaymentResponse } from "@/types/payment";
 import { PwaMarketCard } from "../components/PwaMarketCard";
@@ -75,27 +79,10 @@ export function PwaMarketsPage() {
 
   if (loading)
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: "100px 0",
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "100px 0" }}>
         <div style={{ textAlign: "center", color: "var(--text-subtle)" }}>
-          <div
-            style={{
-              fontSize: 48,
-              marginBottom: 16,
-              animation: "bounce 2s infinite",
-            }}
-          >
-            🔮
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>
-            Syncing predictions…
-          </div>
+          <div style={{ fontSize: 48, marginBottom: 16, animation: "bounce 2s infinite" }}>🔮</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Syncing predictions…</div>
         </div>
       </div>
     );
@@ -109,11 +96,7 @@ export function PwaMarketsPage() {
     ? markets.find((m) => m.id === activeBet.marketId)
     : null;
 
-  const filteredOpen = openMarkets;
-  const filteredUpcoming = upcomingMarkets;
-  const filteredSettled = settledMarkets;
-  const hasResults =
-    filteredOpen.length + filteredUpcoming.length + filteredSettled.length > 0;
+  const hasResults = markets.length > 0;
 
   const renderGrid = (items: Market[]) => (
     <PwaMarketGrid>
@@ -130,18 +113,11 @@ export function PwaMarketsPage() {
   );
 
   return (
-    <div
-      style={{
-        padding: "40px 24px 80px",
-        maxWidth: 1200,
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: 32,
-      }}
-    >
+    <div style={{ padding: "32px 16px 100px", maxWidth: 1200, margin: "0 auto", position: "relative" }}>
+      <div className="mesh-bg" />
+
       {/* ── Search bar ── */}
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", marginBottom: 40 }}>
         <svg
           style={{
             position: "absolute",
@@ -171,11 +147,11 @@ export function PwaMarketsPage() {
           style={{
             width: "100%",
             boxSizing: "border-box",
-            padding: "12px 40px 12px 44px",
-            borderRadius: 14,
+            padding: "14px 40px 14px 44px",
+            borderRadius: 16,
             border: "1px solid var(--glass-border)",
             background: "var(--bg-card)",
-            boxShadow: "var(--shadow-sm)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
             fontSize: 15,
             color: "var(--text-main)",
             outline: "none",
@@ -190,13 +166,18 @@ export function PwaMarketsPage() {
               right: 12,
               top: "50%",
               transform: "translateY(-50%)",
-              background: "none",
+              background: "rgba(0,0,0,0.05)",
               border: "none",
               cursor: "pointer",
               color: "var(--text-subtle)",
-              fontSize: 18,
-              lineHeight: 1,
-              padding: 4,
+              fontSize: 12,
+              borderRadius: "50%",
+              width: 20,
+              height: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 0,
             }}
           >
             ✕
@@ -206,143 +187,40 @@ export function PwaMarketsPage() {
 
       {/* No results */}
       {!hasResults && searchQuery.trim() && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "80px 0",
-            gap: 16,
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 48 }}>🔍</div>
-          <div
-            style={{ fontSize: 20, fontWeight: 800, color: "var(--text-main)" }}
-          >
-            No markets found
-          </div>
-          <div style={{ fontSize: 14, color: "var(--text-muted)" }}>
-            Try a different search term.
-          </div>
+        <div style={{ textAlign: "center", padding: "80px 0", color: "var(--text-subtle)" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-main)", fontFamily: "var(--font-display)" }}>No markets found</div>
+          <div style={{ fontSize: 14, marginTop: 8 }}>Try a different search term.</div>
         </div>
       )}
 
-      {filteredOpen.length > 0 && (
-        <section>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 20,
-            }}
-          >
-            <div
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                background: "rgba(16, 185, 129, 0.1)",
-                color: "#10b981",
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.05em",
-              }}
-            >
-              LIVE
-            </div>
-            <h2
-              style={{
-                fontSize: 20,
-                fontWeight: 800,
-                color: "var(--text-main)",
-                margin: 0,
-                fontFamily: "var(--font-display)",
-              }}
-            >
-              Active Markets
-            </h2>
+      {openMarkets.length > 0 && (
+        <section style={{ marginBottom: 48 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <div style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(34, 197, 94, 0.15)", color: "#22c55e", fontSize: 10, fontWeight: 900, letterSpacing: "0.05em", textTransform: "uppercase" }}>Live</div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)", margin: 0, fontFamily: "var(--font-display)" }}>Active Markets</h2>
           </div>
-          {renderGrid(filteredOpen)}
+          {renderGrid(openMarkets)}
         </section>
       )}
 
-      {filteredUpcoming.length > 0 && (
-        <section>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 20,
-            }}
-          >
-            <div
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                background: "var(--bg-main)",
-                color: "var(--text-subtle)",
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.05em",
-              }}
-            >
-              SOON
-            </div>
-            <h2
-              style={{
-                fontSize: 20,
-                fontWeight: 800,
-                color: "var(--text-main)",
-                margin: 0,
-                fontFamily: "var(--font-display)",
-              }}
-            >
-              Coming Up
-            </h2>
+      {upcomingMarkets.length > 0 && (
+        <section style={{ marginBottom: 48 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <div style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(59, 130, 246, 0.15)", color: "#3b82f6", fontSize: 10, fontWeight: 900, letterSpacing: "0.05em", textTransform: "uppercase" }}>Soon</div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)", margin: 0, fontFamily: "var(--font-display)" }}>Coming Up</h2>
           </div>
-          {renderGrid(filteredUpcoming)}
+          {renderGrid(upcomingMarkets)}
         </section>
       )}
 
-      {filteredSettled.length > 0 && (
-        <section>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 20,
-            }}
-          >
-            <div
-              style={{
-                padding: "6px 12px",
-                borderRadius: 20,
-                background: "var(--bg-main)",
-                color: "var(--text-subtle)",
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.05em",
-              }}
-            >
-              SETTLED
-            </div>
-            <h2
-              style={{
-                fontSize: 20,
-                fontWeight: 800,
-                color: "var(--text-main)",
-                margin: 0,
-                fontFamily: "var(--font-display)",
-              }}
-            >
-              History
-            </h2>
+      {settledMarkets.length > 0 && (
+        <section style={{ marginBottom: 48 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <div style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(100, 116, 139, 0.15)", color: "var(--text-subtle)", fontSize: 10, fontWeight: 900, letterSpacing: "0.05em", textTransform: "uppercase" }}>Settled</div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-main)", margin: 0, fontFamily: "var(--font-display)" }}>Market History</h2>
           </div>
-          {renderGrid(filteredSettled)}
+          {renderGrid(settledMarkets)}
         </section>
       )}
 

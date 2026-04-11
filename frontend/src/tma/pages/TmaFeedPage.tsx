@@ -1,7 +1,13 @@
 import { FC, useState, useEffect } from "react";
 import { Spinner } from "@telegram-apps/telegram-ui";
 import { Page } from "@/tma/components/Page";
-import { getMarkets, getMyBets, getRecentActivity, type Market, type ActivityEvent } from "@/api/client";
+import {
+  getMarkets,
+  getMyBets,
+  getRecentActivity,
+  type Market,
+  type ActivityEvent,
+} from "@/api/client";
 import { useAuth } from "@/tma/hooks/useAuth";
 import { TmaBetModal } from "@/tma/components/TmaBetModal";
 import { Link } from "@/tma/components/Link/Link";
@@ -22,8 +28,12 @@ interface FormattedEvent {
 function parseActivityEvent(e: ActivityEvent): FormattedEvent {
   const amount = `Nu ${Number(e.amount).toLocaleString()}`;
   const rawUserName = e.userName || "";
-  const userName = rawUserName.startsWith("@") ? rawUserName.substring(1) : rawUserName;
-  const initials = rawUserName ? rawUserName.substring(0, 1).toUpperCase() : "?";
+  const userName = rawUserName.startsWith("@")
+    ? rawUserName.substring(1)
+    : rawUserName;
+  const initials = rawUserName
+    ? rawUserName.substring(0, 1).toUpperCase()
+    : "?";
   return {
     userName,
     initials,
@@ -67,19 +77,21 @@ function LiveTicker() {
   const current = events[idx];
 
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      background: "var(--bg-card)",
-      border: "1px solid var(--glass-border)",
-      borderRadius: 14,
-      padding: "8px 12px",
-      marginBottom: 16,
-      overflow: "hidden",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-      position: "relative",
-    }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        background: "var(--bg-card)",
+        border: "1px solid var(--glass-border)",
+        borderRadius: 14,
+        padding: "8px 12px",
+        marginBottom: 16,
+        overflow: "hidden",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+        position: "relative",
+      }}
+    >
       <style>{`
         @keyframes tickerSlideUp {
           from { opacity: 0; transform: translateY(10px); }
@@ -90,24 +102,27 @@ function LiveTicker() {
           50% { opacity: 0.5; }
         }
       `}</style>
-      
+
       {/* Avatar / Initial */}
-      <div style={{
-        width: 32,
-        height: 32,
-        borderRadius: "50%",
-        background: current.type === "win" 
-          ? "linear-gradient(135deg, #22c55e, #16a34a)" 
-          : "linear-gradient(135deg, #3b82f6, #2563eb)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 14,
-        fontWeight: 800,
-        color: "#fff",
-        flexShrink: 0,
-        boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-      }}>
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: "50%",
+          background:
+            current.type === "win"
+              ? "linear-gradient(135deg, #22c55e, #16a34a)"
+              : "linear-gradient(135deg, #3b82f6, #2563eb)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 14,
+          fontWeight: 800,
+          color: "#ffffffff",
+          flexShrink: 0,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+        }}
+      >
         {current.initials === "@" ? (
           <Flame size={16} color="#fff" fill="#fff" />
         ) : (
@@ -115,56 +130,84 @@ function LiveTicker() {
         )}
       </div>
 
-      <div style={{
-        flex: 1,
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: 1,
-        animation: visible ? "tickerSlideUp 0.4s ease-out forwards" : "none",
-        opacity: visible ? 1 : 0,
-      }}>
-        <div style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: "var(--text-main)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}>
-          {current.userName} <span style={{ fontWeight: 500, color: "var(--text-muted)" }}>{current.action}</span>{" "}
-          <span style={{ color: current.type === "win" ? "#22c55e" : "#3b82f6" }}>{current.amount}</span>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 1,
+          animation: visible ? "tickerSlideUp 0.4s ease-out forwards" : "none",
+          opacity: visible ? 1 : 0,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: "var(--text-main)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {current.userName}{" "}
+          <span style={{ fontWeight: 500, color: "var(--text-muted)" }}>
+            {current.action}
+          </span>{" "}
+          <span
+            style={{ color: current.type === "win" ? "#22c55e" : "#3b82f6" }}
+          >
+            {current.amount}
+          </span>
         </div>
-        <div style={{
-          fontSize: 10,
-          fontWeight: 600,
-          color: "var(--text-subtle)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}>
-          on <span style={{ color: "var(--text-muted)" }}>{current.outcome}</span> · {current.marketTitle}
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--text-subtle)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          on{" "}
+          <span style={{ color: "var(--text-muted)" }}>{current.outcome}</span>{" "}
+          · {current.marketTitle}
         </div>
       </div>
 
       {/* Live Indicator */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        background: "rgba(239, 68, 68, 0.1)",
-        padding: "4px 8px",
-        borderRadius: 8,
-        flexShrink: 0,
-      }}>
-        <div style={{
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          background: "#ef4444",
-          animation: "livePulse 1.5s ease-in-out infinite",
-        }} />
-        <span style={{ fontSize: 9, fontWeight: 900, color: "#ef4444", textTransform: "uppercase" }}>Live</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          background: "rgba(239, 68, 68, 0.1)",
+          padding: "4px 8px",
+          borderRadius: 8,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            background: "#ef4444",
+            animation: "livePulse 1.5s ease-in-out infinite",
+          }}
+        />
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 900,
+            color: "#ef4444",
+            textTransform: "uppercase",
+          }}
+        >
+          Live
+        </span>
       </div>
     </div>
   );
@@ -277,7 +320,8 @@ function MarketCard({
         flexDirection: "column",
         gap: 12,
         position: "relative",
-        boxShadow: "6px 6px 16px rgba(0,0,0,0.35), -3px -3px 10px rgba(255,255,255,0.04)",
+        boxShadow:
+          "6px 6px 16px rgba(0,0,0,0.35), -3px -3px 10px rgba(255,255,255,0.04)",
       }}
     >
       <style>{`@keyframes shimmer-slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}`}</style>
@@ -423,21 +467,25 @@ function MarketCard({
                   }}
                 />
                 {/* Shimmer sweep */}
-                <div style={{
-                  position: "absolute",
-                  inset: 0,
-                  overflow: "hidden",
-                  borderRadius: 16,
-                  pointerEvents: "none",
-                }}>
-                  <div style={{
+                <div
+                  style={{
                     position: "absolute",
-                    top: 0,
-                    bottom: 0,
-                    width: "40%",
-                    background: `linear-gradient(90deg, transparent, ${s.color}18, transparent)`,
-                    animation: "shimmer-slide 2.4s ease-in-out infinite",
-                  }} />
+                    inset: 0,
+                    overflow: "hidden",
+                    borderRadius: 16,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      bottom: 0,
+                      width: "40%",
+                      background: `linear-gradient(90deg, transparent, ${s.color}18, transparent)`,
+                      animation: "shimmer-slide 2.4s ease-in-out infinite",
+                    }}
+                  />
                 </div>
                 {/* Button content */}
                 <div
@@ -451,7 +499,14 @@ function MarketCard({
                   }}
                 >
                   {/* Left: label + reputation signal */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 3,
+                      minWidth: 0,
+                    }}
+                  >
                     <span
                       style={{
                         fontSize: "0.9rem",
@@ -476,7 +531,13 @@ function MarketCard({
                           gap: 3,
                         }}
                       >
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="#f59e0b" stroke="none">
+                        <svg
+                          width="8"
+                          height="8"
+                          viewBox="0 0 24 24"
+                          fill="#f59e0b"
+                          stroke="none"
+                        >
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                         </svg>
                         Experts {Math.round(s.reputationSignal * 100)}%
@@ -550,7 +611,16 @@ function MarketCard({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
@@ -573,7 +643,16 @@ function MarketCard({
               color: "var(--text-subtle)",
             }}
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
               <polyline points="16 6 12 2 8 6" />
               <line x1="12" y1="2" x2="12" y2="15" />
@@ -745,8 +824,6 @@ export const TmaFeedPage: FC = () => {
         }}
       >
         <div className="mesh-bg" />
-
-
 
         {/* ── Search bar ── */}
         <div style={{ position: "relative", marginBottom: 20 }}>
@@ -1034,7 +1111,7 @@ export const TmaFeedPage: FC = () => {
                 LIVE
               </div>
             </div>
-            
+
             {/* ── Live activity ticker (Redesigned & Relocated) ── */}
             <LiveTicker />
 

@@ -1,12 +1,6 @@
 import { FC, useRef, useEffect, useState } from "react";
 import { Share2, Download } from "lucide-react";
 
-declare global {
-  interface Window {
-    Telegram?: { WebApp?: { openTelegramLink?: (url: string) => void } };
-  }
-}
-
 interface BetShareCardProps {
   userName: string;
   userPhotoUrl?: string | null;
@@ -276,7 +270,7 @@ export const BetShareCard: FC<BetShareCardProps> = (props) => {
     setSharing(true);
 
     try {
-      // Strategy 1: Native share with image file (works in Telegram mobile)
+      // ── Strategy 1: Native share sheet with image file (works inside Telegram mobile) ──
       if (blob && navigator.share && navigator.canShare) {
         const file = new File([blob], "tara-bet.png", { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
@@ -288,20 +282,27 @@ export const BetShareCard: FC<BetShareCardProps> = (props) => {
           return;
         }
       }
-      // Strategy 2: Native share text + url
+
+      // ── Strategy 2: Native share without file (text + url) ──
       if (navigator.share) {
         await navigator.share({ text: shareText, url: refLink });
         return;
       }
-      // Strategy 3: Telegram WebApp (text-only fallback)
+
+      // ── Strategy 3: Telegram WebApp openTelegramLink (text-only fallback) ──
       const telegramShareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
       if (window.Telegram?.WebApp?.openTelegramLink) {
         window.Telegram.WebApp.openTelegramLink(telegramShareUrl);
         return;
       }
+
+      // ── Strategy 4: Open in new tab ──
       window.open(telegramShareUrl, "_blank");
     } catch (err: any) {
-      if (err?.name !== "AbortError") console.warn("Share failed:", err);
+      // User cancelled or share failed — silently ignore AbortError
+      if (err?.name !== "AbortError") {
+        console.warn("Share failed:", err);
+      }
     } finally {
       setSharing(false);
     }
@@ -315,6 +316,7 @@ export const BetShareCard: FC<BetShareCardProps> = (props) => {
     a.click();
   };
 
+  // Whether native file sharing is likely supported (heuristic)
   const canShareImage =
     typeof navigator !== "undefined" &&
     !!navigator.share &&
@@ -434,7 +436,7 @@ export const BetShareCard: FC<BetShareCardProps> = (props) => {
         </button>
       </div>
 
-      {/* Hint */}
+      {/* Hint text */}
       {!rendering && (
         <p
           style={{

@@ -60,14 +60,10 @@ export function PwaMarketDetailPage() {
 
   if (loading) {
     return (
-      <div
-        style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}
-      >
-        <div style={{ textAlign: "center", color: "#9ca3af" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "12px" }}>⏳</div>
-          <div>Loading market...</div>
+        <div style={{ textAlign: "center", color: "var(--text-subtle)", padding: "100px 0" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "16px", animation: "bounce 2s infinite" }}>🔮</div>
+          <div style={{ fontWeight: 600 }}>Syncing market...</div>
         </div>
-      </div>
     );
   }
 
@@ -108,25 +104,70 @@ export function PwaMarketDetailPage() {
 
   return (
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: bp === "mobile" ? "16px 12px 100px" : "40px 20px", position: "relative" }}>
-      <Link
-        to="/"
-        style={{
-          color: "var(--text-subtle)",
-          textDecoration: "none",
-          fontSize: "0.85rem",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "6px",
-          marginBottom: "24px",
-          fontWeight: 700,
-          transition: "color 0.2s",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-main)")}
-        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-subtle)")}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        Back to Feed
-      </Link>
+      <div className="mesh-bg" />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+        <Link
+          to="/"
+          style={{
+            color: "var(--text-subtle)",
+            textDecoration: "none",
+            fontSize: "0.85rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            fontWeight: 700,
+            transition: "color 0.2s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-main)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-subtle)")}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          Back to Feed
+        </Link>
+
+        <button
+          onClick={() => {
+            const url = window.location.href;
+            const text = `Check out this prediction market: ${market.title}`;
+            if (navigator.share) {
+              navigator.share({ title: market.title, text, url }).catch(() => {});
+            } else {
+              navigator.clipboard.writeText(url);
+              alert("Link copied to clipboard!");
+            }
+          }}
+          style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--glass-border)",
+            borderRadius: 12,
+            padding: "8px 16px",
+            fontSize: "0.85rem",
+            fontWeight: 700,
+            color: "var(--text-main)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            boxShadow: "var(--shadow-sm)",
+            transition: "all 0.2s"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = "var(--text-muted)";
+            e.currentTarget.style.transform = "translateY(-1px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "var(--glass-border)";
+            e.currentTarget.style.transform = "translateY(0)";
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          Share
+        </button>
+      </div>
 
       <div style={{ display: "flex", flexDirection: bp === "mobile" ? "column" : "row", gap: "32px", alignItems: "flex-start" }}>
         {/* Left Column: Info */}
