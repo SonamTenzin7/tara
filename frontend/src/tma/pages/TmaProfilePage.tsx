@@ -235,15 +235,18 @@ export const TmaProfilePage: FC = () => {
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
-  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
-
+  const [referralStats, setReferralStats] = useState<ReferralStats | null>(
+    null,
+  );
 
   useEffect(() => {
     getMe()
       .then(setFreshUser)
       .catch(() => setFreshUser(authUser))
       .finally(() => setFreshLoading(false));
-    getReferralStats().then(setReferralStats).catch(() => undefined);
+    getReferralStats()
+      .then(setReferralStats)
+      .catch(() => undefined);
   }, []);
 
   // Re-fetch balance whenever a bet or deposit fires from any page
@@ -677,28 +680,25 @@ export const TmaProfilePage: FC = () => {
                 gap: 6,
                 alignSelf: "flex-start",
                 flexShrink: 0,
-                marginTop: 28,
+                marginTop: 5,
               }}
             >
               <button
                 onClick={() => navigate("/settings")}
+                aria-label="Settings"
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
-                  padding: "8px 14px",
+                  justifyContent: "center",
+                  padding: "8px",
                   borderRadius: 10,
                   border: "1.5px solid rgba(255,255,255,0.5)",
                   background: "transparent",
                   color: "#fff",
-                  fontSize: 12,
-                  fontWeight: 700,
                   cursor: "pointer",
-                  whiteSpace: "nowrap",
                 }}
               >
-                <Settings size={13} />
-                Settings
+                <Settings size={16} />
               </button>
             </div>
           </div>
@@ -896,15 +896,21 @@ export const TmaProfilePage: FC = () => {
                     }}
                   >
                     Link
-                    <img
-                      src={dkBankLogo}
-                      alt="DK Bank"
+                    <span
                       style={{
-                        height: 14,
-                        width: "auto",
-                        mixBlendMode: "multiply",
+                        background: "#fff",
+                        borderRadius: 4,
+                        padding: "1px 5px",
+                        display: "inline-flex",
+                        alignItems: "center",
                       }}
-                    />
+                    >
+                      <img
+                        src={dkBankLogo}
+                        alt="DK Bank"
+                        style={{ height: 14, width: "auto" }}
+                      />
+                    </span>
                     Account
                   </span>
                 )}
@@ -1012,15 +1018,21 @@ export const TmaProfilePage: FC = () => {
                       >
                         <Link2 size={15} />
                         Link{" "}
-                        <img
-                          src={dkBankLogo}
-                          alt="DK Bank"
+                        <span
                           style={{
-                            height: 13,
-                            width: "auto",
-                            mixBlendMode: "multiply",
+                            background: "rgba(255,255,255,0.15)",
+                            borderRadius: 4,
+                            padding: "1px 5px",
+                            display: "inline-flex",
+                            alignItems: "center",
                           }}
-                        />{" "}
+                        >
+                          <img
+                            src={dkBankLogo}
+                            alt="DK Bank"
+                            style={{ height: 13, width: "auto" }}
+                          />
+                        </span>{" "}
                         Account
                       </span>
                     )}
@@ -1086,29 +1098,73 @@ export const TmaProfilePage: FC = () => {
         <div style={{ padding: "0 16px", marginBottom: 16 }}>
           <div
             style={{
-              background: "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(99,102,241,0.04))",
+              background:
+                "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(99,102,241,0.04))",
               border: "1px solid rgba(99,102,241,0.25)",
               borderRadius: 16,
               padding: "16px",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 10,
+              }}
+            >
               <UserPlus size={18} color="#818cf8" />
-              <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-main)" }}>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  color: "var(--text-main)",
+                }}
+              >
                 Invite Friends
               </span>
               {(referralStats?.convertedCount ?? 0) > 0 && (
-                <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: "#22c55e", background: "rgba(34,197,94,0.12)", padding: "2px 8px", borderRadius: 99 }}>
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#22c55e",
+                    background: "rgba(34,197,94,0.12)",
+                    padding: "2px 8px",
+                    borderRadius: 99,
+                  }}
+                >
                   {referralStats!.convertedCount} converted
                 </span>
               )}
             </div>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.5 }}>
-              Earn <b style={{ color: "var(--text-main)" }}>Nu {referralStats?.flatBonus ?? 50} + {referralStats?.betPct ?? 5}%</b> of their first bet when they sign up with your link.
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--text-muted)",
+                margin: "0 0 12px",
+                lineHeight: 1.5,
+              }}
+            >
+              Earn{" "}
+              <b style={{ color: "var(--text-main)" }}>
+                Nu {referralStats?.flatBonus ?? 50} +{" "}
+                {referralStats?.betPct ?? 5}%
+              </b>{" "}
+              of their first bet when they sign up with your link.
             </p>
             {referralStats?.totalEarned ? (
-              <div style={{ fontSize: 12, color: "#22c55e", fontWeight: 700, marginBottom: 10 }}>
-                Total earned: Nu {Number(referralStats.totalEarned).toLocaleString()}
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#22c55e",
+                  fontWeight: 700,
+                  marginBottom: 10,
+                }}
+              >
+                Total earned: Nu{" "}
+                {Number(referralStats.totalEarned).toLocaleString()}
               </div>
             ) : null}
             {/* Share Stats card — shows win rate + embeds referral link */}
@@ -1123,7 +1179,8 @@ export const TmaProfilePage: FC = () => {
                 gap: 8,
                 padding: "11px 0",
                 borderRadius: 12,
-                background: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.18))",
+                background:
+                  "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.18))",
                 border: "1px solid rgba(99,102,241,0.35)",
                 color: "#a5b4fc",
                 fontSize: 13,

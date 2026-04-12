@@ -44,6 +44,6 @@ import { UsersModule } from "../users/users.module";
     ReputationService,
   ],
   controllers: [MarketsController],
-  exports: [MarketsService, ParimutuelEngine],
+  exports: [MarketsService, ParimutuelEngine, KeeperService],
 })
 export class MarketsModule {}

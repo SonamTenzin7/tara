@@ -26,6 +26,7 @@ import { IsNumber, IsOptional, IsString, Min } from "class-validator";
 import { Repository, DataSource } from "typeorm";
 import { JwtAuthGuard, AdminGuard } from "../auth/guards";
 import { MarketsService, CreateMarketDto } from "../markets/markets.service";
+import { KeeperService } from "../markets/keeper.service";
 import { FixturesService } from "./fixtures.service";
 import { AuditService } from "./audit.service";
 import { TelegramSimpleService } from "../telegram/telegram.service.simple";
@@ -64,6 +65,7 @@ class CreditUserDto {
 export class AdminController {
   constructor(
     private marketsService: MarketsService,
+    private keeperService: KeeperService,
     private fixturesService: FixturesService,
     private auditService: AuditService,
     private telegramSimple: TelegramSimpleService,
@@ -620,5 +622,38 @@ export class AdminController {
   })
   getAuditLogsByEntity(@Param("entityId") entityId: string) {
     return this.auditService.findByEntity(entityId);
+  }
+
+  // ── Keeper Bot ────────────────────────────────────────────────────────────
+
+  @Get("keeper/status")
+  @ApiOperation({ summary: "Get keeper bot status and recent logs" })
+  getKeeperStatus() {
+    return this.keeperService.getStatus();
+  }
+
+  @Post("keeper/active")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Start or pause the keeper bot" })
+  setKeeperActive(@Body() body: { active: boolean }) {
+    this.keeperService.setActive(body.active);
+    return { active: body.active };
+  }
+
+  @Post("keeper/trigger/:job")
+  @HttpCode(200)
+  @ApiOperation({
+    summary: "Manually trigger a keeper job (expiry | dispute | liquidity)",
+  })
+  async triggerKeeperJob(@Param("job") job: string) {
+    if (!["expiry", "dispute", "liquidity"].includes(job)) {
+      throw new BadRequestException(
+        "Unknown job. Valid: expiry, dispute, liquidity",
+      );
+    }
+    await this.keeperService.triggerJob(
+      job as "expiry" | "dispute" | "liquidity",
+    );
+    return { triggered: job };
   }
 }

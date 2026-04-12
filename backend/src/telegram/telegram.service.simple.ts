@@ -11,6 +11,29 @@ export class TelegramSimpleService {
   private readonly logger = new Logger(TelegramSimpleService.name);
   private readonly botToken: string;
 
+  // Short-key store for propose callbacks (avoids 64-byte Telegram limit on UUIDs)
+  private proposeKeyCounter = 1;
+  private readonly proposeKeyMap = new Map<
+    number,
+    { marketId: string; outcomeId: string }
+  >();
+
+  /** Register a market+outcome pair and return a short callback key. */
+  registerProposeKey(marketId: string, outcomeId: string): number {
+    const key = this.proposeKeyCounter++;
+    this.proposeKeyMap.set(key, { marketId, outcomeId });
+    // Auto-expire after 48 h
+    setTimeout(() => this.proposeKeyMap.delete(key), 48 * 60 * 60 * 1000);
+    return key;
+  }
+
+  /** Resolve a short key back to {marketId, outcomeId}, or undefined if expired. */
+  resolveProposeKey(
+    key: number,
+  ): { marketId: string; outcomeId: string } | undefined {
+    return this.proposeKeyMap.get(key);
+  }
+
   constructor(
     private readonly configService: ConfigService,
     @InjectRepository(User) private readonly userRepository: Repository<User>,
@@ -45,6 +68,59 @@ export class TelegramSimpleService {
     }
   }
 
+  /**
+   * Send a message with inline keyboard buttons.
+   * buttons: array of rows, each row is array of { text, callbackData }
+   */
+  async sendMessageWithButtons(
+    chatId: number,
+    text: string,
+    buttons: Array<Array<{ text: string; callbackData: string }>>,
+  ): Promise<void> {
+    try {
+      const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+      const inline_keyboard = buttons.map((row) =>
+        row.map((btn) => ({ text: btn.text, callback_data: btn.callbackData })),
+      );
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+          reply_markup: { inline_keyboard },
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        this.logger.error(`sendMessageWithButtons HTTP ${res.status}: ${body}`);
+      }
+    } catch (error: any) {
+      this.logger.error(`sendMessageWithButtons failed: ${error.message}`);
+    }
+  }
+
+  /** Answer a callback_query to remove the loading spinner on the button. */
+  async answerCallbackQuery(
+    callbackQueryId: string,
+    text?: string,
+  ): Promise<void> {
+    try {
+      await fetch(
+        `https://api.telegram.org/bot${this.botToken}/answerCallbackQuery`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+        },
+      );
+    } catch {
+      // non-critical
+    }
+  }
+
   async sendMarketAnnouncement(market: Market): Promise<void> {
     // Simple implementation without complex queries
     const message = `🚀 <b>NEW MARKET</b>\n\n📊 ${market.title}\n⏰ Closes: ${new Date(market.closesAt).toLocaleString()}`;
@@ -59,22 +135,31 @@ export class TelegramSimpleService {
   async postToChannel(text: string): Promise<void> {
     const channelId = process.env.TELEGRAM_CHANNEL_ID;
     if (!channelId) {
-      this.logger.warn('[Channel] TELEGRAM_CHANNEL_ID not set — skipping channel post');
+      this.logger.warn(
+        "[Channel] TELEGRAM_CHANNEL_ID not set — skipping channel post",
+      );
       return;
     }
     try {
       const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
       const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: channelId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: channelId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
       });
       if (!res.ok) {
         const body = await res.text();
         this.logger.error(`[Channel] sendMessage HTTP ${res.status}: ${body}`);
       }
     } catch (error: any) {
-      this.logger.error(`[Channel] Failed to post to channel: ${error.message}`);
+      this.logger.error(
+        `[Channel] Failed to post to channel: ${error.message}`,
+      );
     }
   }
 
