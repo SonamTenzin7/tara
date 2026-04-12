@@ -5,18 +5,17 @@ interface OroLogoProps {
   className?: string;
 }
 
-export const OroLogo: FC<OroLogoProps> = ({ size = 40, className }) => {
+export const OroLogo: FC<OroLogoProps> = ({ size = 54, className }) => {
   return (
     <img
-      src="/logo.png"
+      src="/logo.svg"
       alt="Oro Logo"
       width={size}
       height={size}
       className={className}
-      style={{ 
-        display: "block", 
+      style={{
+        display: "block",
         objectFit: "contain",
-        mixBlendMode: "multiply"
       }}
     />
   );

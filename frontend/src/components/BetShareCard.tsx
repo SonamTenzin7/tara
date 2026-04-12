@@ -77,7 +77,7 @@ async function renderCard(
     await new Promise<void>((res, rej) => {
       logoImg.onload = () => res();
       logoImg.onerror = () => rej();
-      logoImg.src = "/logo.png";
+      logoImg.src = "/logo.svg";
     });
     ctx.drawImage(logoImg, 32, 24, 28, 28);
     ctx.fillText("Oro Predict", 68, 44);

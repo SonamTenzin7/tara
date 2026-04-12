@@ -17,7 +17,6 @@ import { publicUrl } from "@/helpers/publicUrl.ts";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { OroLogo } from "@/components/OroLogo";
 
-
 function PwaLayout() {
   // const { isAuthenticated, setIsAuthenticated } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -50,47 +49,94 @@ function PwaLayout() {
           boxShadow: "var(--shadow-sm)",
         }}
       >
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 20px", height: 64, display: "flex", alignItems: "center" }}>
-        {/* Logo + branding */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <OroLogo size={42} />
-          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-            <span style={{ fontWeight: 800, fontSize: "1.2rem", color: "var(--text-main)", letterSpacing: "-0.03em", fontFamily: "var(--font-display)" }}>
-              Oro
-            </span>
-            <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              Parimutuel Predictions
-            </span>
+        <div
+          style={{
+            maxWidth: 1400,
+            margin: "0 auto",
+            padding: "0 20px",
+            height: 64,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          {/* Logo + branding */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ marginLeft: 16 }}>
+              <OroLogo size={54} />
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                lineHeight: 1.1,
+              }}
+            >
+              <span
+                style={{
+                  fontWeight: 800,
+                  fontSize: "1.2rem",
+                  color: "var(--text-main)",
+                  letterSpacing: "-0.03em",
+                  fontFamily: "var(--font-display)",
+                }}
+              >
+                Oro
+              </span>
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  color: "var(--text-muted)",
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Parimutuel Predictions
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Top nav links - currently empty but reserved for future profile/global actions */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-          <a
-            href="https://t.me/OroPredictBot"
-            target="_blank"
-            rel="noopener noreferrer"
+          {/* Top nav links - currently empty but reserved for future profile/global actions */}
+          <div
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "linear-gradient(135deg, #229ed9, #1a7abf)",
-              color: "#fff",
-              padding: "7px 14px",
-              borderRadius: 20,
-              textDecoration: "none",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              boxShadow: "0 2px 8px rgba(34,158,217,0.3)",
-              letterSpacing: "0.01em",
+              marginLeft: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-            </svg>
-            Telegram
-          </a>
-          
-          {/* Desktop-only nav links — disabled: betting is through Telegram only */}
-          {/* {!isMobile && [
+            <a
+              href="https://t.me/OroPredictBot"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "linear-gradient(135deg, #229ed9, #1a7abf)",
+                color: "#fff",
+                padding: "7px 14px",
+                borderRadius: 20,
+                textDecoration: "none",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                boxShadow: "0 2px 8px rgba(34,158,217,0.3)",
+                letterSpacing: "0.01em",
+              }}
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+              </svg>
+              Telegram
+            </a>
+
+            {/* Desktop-only nav links — disabled: betting is through Telegram only */}
+            {/* {!isMobile && [
             { to: "/my-bets", label: "My Bets" },
             { to: "/results", label: "Results" },
             { to: "/wallet", label: "Wallet" },
@@ -108,8 +154,7 @@ function PwaLayout() {
               {label}
             </NavLink>
           ))} */}
-        </div>
-
+          </div>
         </div>
       </header>
 
@@ -134,7 +179,6 @@ function PwaLayout() {
       </div>
 
       <PwaBottomNav />
-
     </div>
   );
 }

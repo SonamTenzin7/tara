@@ -272,7 +272,9 @@ function MarketCard({
         boxShadow: hasLegendBet
           ? "6px 6px 16px rgba(0,0,0,0.35), -3px -3px 10px rgba(255,255,255,0.04), 0 0 0 1px rgba(245,158,11,0.2), 0 0 18px rgba(245,158,11,0.18)"
           : "6px 6px 16px rgba(0,0,0,0.35), -3px -3px 10px rgba(255,255,255,0.04)",
-        animation: hasLegendBet ? "legendCardPulse 3s ease-in-out infinite" : "none",
+        animation: hasLegendBet
+          ? "legendCardPulse 3s ease-in-out infinite"
+          : "none",
       }}
     >
       <style>{`
@@ -875,10 +877,10 @@ export const TmaFeedPage: FC = () => {
       <style>{`
         @keyframes heartbeat {
           0%   { transform: scale(1);    opacity: 1; }
-          14%  { transform: scale(1.5);  opacity: 1; }
-          28%  { transform: scale(1);    opacity: 0.8; }
-          42%  { transform: scale(1.35); opacity: 1; }
-          70%  { transform: scale(1);    opacity: 0.6; }
+          14%  { transform: scale(1.2);  opacity: 1; }
+          28%  { transform: scale(1);    opacity: 0.9; }
+          42%  { transform: scale(1.12); opacity: 1; }
+          70%  { transform: scale(1);    opacity: 0.8; }
           100% { transform: scale(1);    opacity: 1; }
         }
       `}</style>
@@ -1171,7 +1173,7 @@ export const TmaFeedPage: FC = () => {
                   height: 8,
                   borderRadius: "50%",
                   background: "#22c55e",
-                  animation: "heartbeat 1.6s ease-in-out infinite",
+                  animation: "heartbeat 2.4s ease-in-out infinite",
                 }}
               />
               <div

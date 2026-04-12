@@ -58,14 +58,16 @@ export class MarketsService {
    * Returns both pending (bets) and won (payouts) positions so the ticker
    * shows a mix of activity.
    */
-  async getRecentActivity(limit = 20): Promise<{
-    type: "bet" | "win";
-    userName: string;
-    outomeLabel: string;
-    marketTitle: string;
-    amount: number;
-    placedAt: Date;
-  }[]> {
+  async getRecentActivity(limit = 20): Promise<
+    {
+      type: "bet" | "win";
+      userName: string;
+      outomeLabel: string;
+      marketTitle: string;
+      amount: number;
+      placedAt: Date;
+    }[]
+  > {
     const positions = await this.dataSource
       .getRepository(Position)
       .createQueryBuilder("p")
@@ -78,12 +80,11 @@ export class MarketsService {
       .getMany();
 
     return positions.map((p) => {
-      const displayName =
-        p.user?.username
-          ? `@${p.user.username}`
-          : p.user?.firstName
-            ? p.user.firstName
-            : "Someone";
+      const displayName = p.user?.username
+        ? `@${p.user.username}`
+        : p.user?.firstName
+          ? p.user.firstName
+          : "Someone";
 
       return {
         type: p.status === "won" ? "win" : "bet",
@@ -168,7 +169,10 @@ export class MarketsService {
       .orderBy("market.createdAt", "DESC");
 
     if (q && q.trim()) {
-      const safe = q.trim().toLowerCase().replace(/[%_\\]/g, "\\$&");
+      const safe = q
+        .trim()
+        .toLowerCase()
+        .replace(/[%_\\]/g, "\\$&");
       const term = `%${safe}%`;
       qb.where(
         "LOWER(market.title) LIKE :term ESCAPE '\\' OR LOWER(market.description) LIKE :term ESCAPE '\\'",
@@ -206,8 +210,15 @@ export class MarketsService {
     if (!market.outcomes?.length || Number(market.totalPool) === 0) return;
     const ids = market.outcomes.map((o) => o.id);
     const [signal, signalMeta, weightedShares] = await Promise.all([
-      this.reputationService.computeMarketSignal(market.id, ids, market.category),
-      this.reputationService.computeSignalConfidence(market.id, market.category),
+      this.reputationService.computeMarketSignal(
+        market.id,
+        ids,
+        market.category,
+      ),
+      this.reputationService.computeSignalConfidence(
+        market.id,
+        market.category,
+      ),
       this.reputationService.computeReputationWeightedShares(market.id),
     ]);
 
@@ -229,8 +240,9 @@ export class MarketsService {
       (outcome as any).reputationSignal =
         signal[outcome.id] != null ? signal[outcome.id] : null;
       // intelligenceProb: rep-weighted LMSR (null when no data)
-      (outcome as any).intelligenceProb =
-        hasWeightedData ? repWeightedProbs[i] : null;
+      (outcome as any).intelligenceProb = hasWeightedData
+        ? repWeightedProbs[i]
+        : null;
     }
     (market as any).signalMeta = signalMeta;
   }
@@ -241,7 +253,8 @@ export class MarketsService {
     if (dto.title) market.title = dto.title;
     if (dto.description) market.description = dto.description;
     if (dto.imageUrl) market.imageUrl = dto.imageUrl;
-    if (dto.resolutionCriteria !== undefined) market.resolutionCriteria = dto.resolutionCriteria;
+    if (dto.resolutionCriteria !== undefined)
+      market.resolutionCriteria = dto.resolutionCriteria;
     if (dto.opensAt) market.opensAt = new Date(dto.opensAt);
     if (dto.closesAt) market.closesAt = new Date(dto.closesAt);
     if (dto.houseEdgePct !== undefined) market.houseEdgePct = dto.houseEdgePct;
@@ -254,7 +267,12 @@ export class MarketsService {
   }
 
   async placeBet(userId: string, marketId: string, dto: OpenPositionDto) {
-    return this.engine.placePosition(userId, marketId, dto.outcomeId, dto.amount);
+    return this.engine.placePosition(
+      userId,
+      marketId,
+      dto.outcomeId,
+      dto.amount,
+    );
     // cache invalidation handled inside ParimutuelEngine.placeBet
   }
 
@@ -285,10 +303,10 @@ export class MarketsService {
     return result;
   }
 
-  // Dispute constants 
+  // Dispute constants
   private readonly DISPUTE_MIN_PARTICIPANTS = 3;
-  private readonly DISPUTE_MIN_BOND = 10;          
-  private readonly DISPUTE_BOND_PCT = 0.01;       
+  private readonly DISPUTE_MIN_BOND = 10;
+  private readonly DISPUTE_BOND_PCT = 0.01;
 
   async submitDispute(
     userId: string,
@@ -330,7 +348,6 @@ export class MarketsService {
     marketId: string,
     dto: SubmitDisputeDto,
   ): Promise<Dispute> {
-
     const market = await this.findOne(marketId);
     if (market.status !== MarketStatus.RESOLVING)
       throw new BadRequestException(
@@ -340,7 +357,7 @@ export class MarketsService {
     if (market.disputeDeadlineAt && new Date() > market.disputeDeadlineAt)
       throw new BadRequestException("Dispute window has closed");
 
-    // Guard 1: market must have at least 3 unique participants 
+    // Guard 1: market must have at least 3 unique participants
     const { count: participantCount } = await this.dataSource
       .getRepository(Position)
       .createQueryBuilder("p")
@@ -352,16 +369,14 @@ export class MarketsService {
         `Disputes require at least ${this.DISPUTE_MIN_PARTICIPANTS} participants in the market`,
       );
 
-    // Guard 2: disputer must hold an active position in this market 
-    const hasPosition = await this.dataSource
-      .getRepository(Position)
-      .findOne({
-        where: {
-          userId,
-          marketId,
-          status: PositionStatus.PENDING,
-        },
-      });
+    // Guard 2: disputer must hold an active position in this market
+    const hasPosition = await this.dataSource.getRepository(Position).findOne({
+      where: {
+        userId,
+        marketId,
+        status: PositionStatus.PENDING,
+      },
+    });
     if (!hasPosition)
       throw new BadRequestException(
         "You must have an active position in this market to raise a dispute",
@@ -486,43 +501,44 @@ export class MarketsService {
       .orderBy("market.resolvedAt", "DESC")
       .getMany();
 
-    return Promise.all(
-      markets.map(async (m) => {
-        const winner = m.outcomes.find((o) => o.id === m.resolvedOutcomeId) ?? null;
-        const participantCount: { count: string } = await this.dataSource
-          .getRepository("Position")
-          .createQueryBuilder("p")
-          .select("COUNT(DISTINCT p.userId)", "count")
-          .where("p.marketId = :id", { id: m.id })
-          .getRawOne()
-          .catch(() =>
-            this.dataSource
-              .getRepository("Bet")
-              .createQueryBuilder("p")
-              .select("COUNT(DISTINCT p.userId)", "count")
-              .where("p.marketId = :id", { id: m.id })
-              .getRawOne(),
-          );
-        return {
-          id: m.id,
-          title: m.title,
-          description: m.description,
-          imageUrl: m.imageUrl,
-          category: m.category,
-          status: m.status,
-          totalPool: m.totalPool,
-          resolutionCriteria: m.resolutionCriteria ?? null,
-          createdAt: m.createdAt,
-          opensAt: m.opensAt,
-          closesAt: m.closesAt,
-          resolvedAt: m.resolvedAt,
-          participantCount: Number(participantCount?.count ?? 0),
-          winner: winner
-            ? { id: winner.id, label: winner.label }
-            : null,
-        };
-      }),
+    if (!markets.length) return [];
+
+    // Single query to get participant counts for all markets at once (avoids N+1)
+    const marketIds = markets.map((m) => m.id);
+    const participantRows: { marketId: string; count: string }[] =
+      await this.dataSource
+        .getRepository(Position)
+        .createQueryBuilder("p")
+        .select("p.marketId", "marketId")
+        .addSelect("COUNT(DISTINCT p.userId)", "count")
+        .where("p.marketId IN (:...marketIds)", { marketIds })
+        .groupBy("p.marketId")
+        .getRawMany();
+
+    const participantMap = new Map(
+      participantRows.map((r) => [r.marketId, Number(r.count)]),
     );
+
+    return markets.map((m) => {
+      const winner =
+        m.outcomes.find((o) => o.id === m.resolvedOutcomeId) ?? null;
+      return {
+        id: m.id,
+        title: m.title,
+        description: m.description,
+        imageUrl: m.imageUrl,
+        category: m.category,
+        status: m.status,
+        totalPool: m.totalPool,
+        resolutionCriteria: m.resolutionCriteria ?? null,
+        createdAt: m.createdAt,
+        opensAt: m.opensAt,
+        closesAt: m.closesAt,
+        resolvedAt: m.resolvedAt,
+        participantCount: participantMap.get(m.id) ?? 0,
+        winner: winner ? { id: winner.id, label: winner.label } : null,
+      };
+    });
   }
 
   getDisputesByMarket(marketId: string): Promise<Dispute[]> {

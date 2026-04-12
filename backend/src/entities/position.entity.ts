@@ -22,6 +22,7 @@ export enum PositionStatus {
 export { PositionStatus as BetStatus };
 
 @Index(["userId", "marketId"])
+@Index(["placedAt"])
 @Entity("positions")
 export class Position {
   @PrimaryGeneratedColumn("uuid")
@@ -30,7 +31,11 @@ export class Position {
   @Column({ type: "decimal", precision: 18, scale: 2 })
   amount: number;
 
-  @Column({ type: "enum", enum: PositionStatus, default: PositionStatus.PENDING })
+  @Column({
+    type: "enum",
+    enum: PositionStatus,
+    default: PositionStatus.PENDING,
+  })
   status: PositionStatus;
 
   @Column({ type: "decimal", precision: 10, scale: 4, nullable: true })

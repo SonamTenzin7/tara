@@ -40,9 +40,10 @@ async function renderProfileCard(
   const tier = opts.reputationTier;
   const accent = tierColor(tier);
   const label = tierLabel(tier);
-  const acc = opts.totalPredictions > 0
-    ? Math.round((opts.correctPredictions / opts.totalPredictions) * 100)
-    : 0;
+  const acc =
+    opts.totalPredictions > 0
+      ? Math.round((opts.correctPredictions / opts.totalPredictions) * 100)
+      : 0;
 
   // Background gradient
   const bg = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
@@ -56,14 +57,27 @@ async function renderProfileCard(
   ctx.strokeStyle = "rgba(255,255,255,0.035)";
   ctx.lineWidth = 1;
   for (let x = 0; x < CARD_W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CARD_H); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, CARD_H);
+    ctx.stroke();
   }
   for (let y = 0; y < CARD_H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CARD_W, y); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(CARD_W, y);
+    ctx.stroke();
   }
 
   // Radial glow behind stats
-  const glow = ctx.createRadialGradient(CARD_W / 2, CARD_H * 0.6, 20, CARD_W / 2, CARD_H * 0.6, 240);
+  const glow = ctx.createRadialGradient(
+    CARD_W / 2,
+    CARD_H * 0.6,
+    20,
+    CARD_W / 2,
+    CARD_H * 0.6,
+    240,
+  );
   glow.addColorStop(0, `${accent}28`);
   glow.addColorStop(1, "transparent");
   ctx.fillStyle = glow;
@@ -78,7 +92,7 @@ async function renderProfileCard(
     await new Promise<void>((res, rej) => {
       logoImg.onload = () => res();
       logoImg.onerror = () => rej();
-      logoImg.src = "/logo.png";
+      logoImg.src = "/logo.svg";
     });
     ctx.drawImage(logoImg, 32, 24, 26, 26);
     ctx.fillText("Oro Predict", 66, 42);
@@ -160,13 +174,29 @@ async function renderProfileCard(
   // Tagline
   ctx.font = "500 14px system-ui, sans-serif";
   ctx.fillStyle = "rgba(255,255,255,0.6)";
-  ctx.fillText(`I'm a ${label} on Oro. Beat me.`, avatarX + avatarR * 2 + 16, avatarY + 46);
+  ctx.fillText(
+    `I'm a ${label} on Oro. Beat me.`,
+    avatarX + avatarR * 2 + 16,
+    avatarY + 46,
+  );
 
   // Stats row
   const stats = [
-    { label: "Win Rate", value: `${acc}%`, color: acc >= 60 ? "#4ade80" : acc >= 40 ? "#f59e0b" : "#f87171" },
-    { label: "Predictions", value: String(opts.totalPredictions), color: "#93c5fd" },
-    { label: "Correct", value: String(opts.correctPredictions), color: "#6ee7b7" },
+    {
+      label: "Win Rate",
+      value: `${acc}%`,
+      color: acc >= 60 ? "#4ade80" : acc >= 40 ? "#f59e0b" : "#f87171",
+    },
+    {
+      label: "Predictions",
+      value: String(opts.totalPredictions),
+      color: "#93c5fd",
+    },
+    {
+      label: "Correct",
+      value: String(opts.correctPredictions),
+      color: "#6ee7b7",
+    },
   ];
 
   const statY = 196;
@@ -260,7 +290,14 @@ export const ProfileShareCard: FC<ProfileShareCardProps> = (props) => {
   };
 
   return (
-    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+    <div
+      style={{
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
+    >
       {/* Canvas preview — scaled to fit */}
       <div
         style={{

@@ -49,6 +49,7 @@ import {
   Swords,
   Settings,
   UserPlus,
+  Medal,
 } from "lucide-react";
 
 const AnimatedCounter = ({ value }: { value: number }) => {
@@ -461,13 +462,74 @@ export const TmaProfilePage: FC = () => {
               marginBottom: 20,
             }}
           >
-            {user?.photoUrl ? (
-              <img src={user.photoUrl} alt="avatar" style={styles.heroAvatar} />
-            ) : (
-              <div style={styles.heroAvatarPlaceholder}>
-                {(user?.firstName?.[0] || "?").toUpperCase()}
-              </div>
-            )}
+            {/* Avatar with optional contrarian badge ring */}
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              {user?.photoUrl ? (
+                <img
+                  src={user.photoUrl}
+                  alt="avatar"
+                  style={{
+                    ...styles.heroAvatar,
+                    border: user?.contrarianBadge === "gold"
+                      ? "2.5px solid #f59e0b"
+                      : user?.contrarianBadge === "silver"
+                        ? "2.5px solid #94a3b8"
+                        : user?.contrarianBadge === "bronze"
+                          ? "2.5px solid #b45309"
+                          : styles.heroAvatar.border,
+                    boxShadow: user?.contrarianBadge === "gold"
+                      ? "0 0 12px rgba(245,158,11,0.5)"
+                      : user?.contrarianBadge === "silver"
+                        ? "0 0 10px rgba(148,163,184,0.4)"
+                        : user?.contrarianBadge === "bronze"
+                          ? "0 0 10px rgba(180,83,9,0.4)"
+                          : undefined,
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    ...styles.heroAvatarPlaceholder,
+                    border: user?.contrarianBadge === "gold"
+                      ? "2.5px solid #f59e0b"
+                      : user?.contrarianBadge === "silver"
+                        ? "2.5px solid #94a3b8"
+                        : user?.contrarianBadge === "bronze"
+                          ? "2.5px solid #b45309"
+                          : styles.heroAvatarPlaceholder.border,
+                  }}
+                >
+                  {(user?.firstName?.[0] || "?").toUpperCase()}
+                </div>
+              )}
+              {/* Medal badge pip */}
+              {user?.contrarianBadge && (() => {
+                const badgeColor =
+                  user.contrarianBadge === "gold" ? "#f59e0b"
+                  : user.contrarianBadge === "silver" ? "#94a3b8"
+                  : "#b45309";
+                return (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: -2,
+                      right: -2,
+                      width: 20,
+                      height: 20,
+                      borderRadius: "50%",
+                      background: badgeColor,
+                      border: "2px solid var(--bg-card)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: `0 2px 6px ${badgeColor}66`,
+                    }}
+                  >
+                    <Medal size={11} color="#fff" />
+                  </div>
+                );
+              })()}
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>
